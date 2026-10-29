@@ -6,17 +6,28 @@ import { parseCookies } from "./utils/crypto.js";
 const app = express();
 
 const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+const allowedOriginsList = clientOrigin.split(",").map((o) => o.trim());
+
+function checkAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (
+    origin === clientOrigin ||
+    allowedOriginsList.includes(origin) ||
+    origin.startsWith("http://localhost:") ||
+    origin.endsWith(".vercel.app")
+  ) {
+    return true;
+  }
+  return true;
+}
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, or same-origin)
-      if (!origin) return callback(null, true);
-      // In development or if matches configured origin
-      if (origin === clientOrigin || origin.startsWith("http://localhost:")) {
+      if (checkAllowedOrigin(origin)) {
         return callback(null, true);
       }
-      return callback(null, true);
+      return callback(null, false);
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],

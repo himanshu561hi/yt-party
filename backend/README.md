@@ -118,3 +118,44 @@ Clients must provide a valid JWT token in `auth: { token }` or in an HttpOnly co
 - `request_control`: `{ action, payload }` -> Sends `control_requested` to Host and Moderator.
 - `approve_control_request`: `{ requestId }` -> Applies action, broadcasts `sync_state`, and sends `control_request_result` to requester.
 - `reject_control_request`: `{ requestId }` -> Leaves state unchanged and sends `control_request_result` to requester.
+
+## Deployment Guide
+
+### Architecture Considerations: Vercel vs. Persistent Hosts
+
+- **Vercel**: Vercel is a serverless platform designed for ephemeral, stateless HTTP functions. It automatically deploys the Express REST API (`/api/auth/*` and `/health`) using `api/index.js` and `vercel.json`. However, serverless functions terminate immediately after sending a response and do not support long-lived persistent TCP WebSocket connections or in-memory rooms.
+- **Render / Railway / Fly.io (Recommended for Full Socket.IO Watch Party)**: Persistent Node.js container hosts run continuous server processes, supporting persistent Socket.IO connections, real-time room state, and authoritative playback loops.
+
+### Option 1: Deploying Backend to Vercel (REST API)
+
+1. Connect your repository to Vercel.
+2. In Project Settings:
+   - **Root Directory**: `backend`
+   - **Framework Preset**: Other
+3. Add Environment Variables in Vercel:
+   - `MONGODB_URI`: Your MongoDB Atlas connection string.
+   - `JWT_SECRET`: A secure random secret string (32+ characters).
+   - `CLIENT_ORIGIN`: Your frontend URL (e.g., `https://your-frontend.vercel.app`).
+4. Deploy. Vercel routes all requests to `api/index.js` via `vercel.json`.
+
+### Option 2: Deploying Full Backend to Render (Socket.IO + REST API)
+
+1. Go to [Render Dashboard](https://dashboard.render.com/) and create a new **Web Service**.
+2. Connect your `yt-party` repository.
+3. Configure the service:
+   - **Root Directory**: `backend`
+   - **Environment**: Node
+   - **Build Command**: `npm install`
+   - **Start Command**: `node server.js`
+4. Set Environment Variables:
+   - `NODE_ENV`: `production`
+   - `PORT`: `5001`
+   - `MONGODB_URI`: Your MongoDB connection string.
+   - `JWT_SECRET`: Your secret key.
+   - `CLIENT_ORIGIN`: Your Vercel frontend URL (e.g., `https://your-app.vercel.app`).
+5. (Optional) Alternatively, use the included `render.yaml` Blueprint specification.
+
+### Recommended Full Stack Setup
+
+- **Frontend**: Deploy `frontend/` on Vercel with environment variable `VITE_SERVER_URL=https://your-backend.onrender.com`.
+- **Backend**: Deploy `backend/` on Render with `CLIENT_ORIGIN=https://your-frontend.vercel.app`.

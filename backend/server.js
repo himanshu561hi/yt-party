@@ -9,12 +9,18 @@ import { socketAuthMiddleware } from "./src/middleware/auth.js";
 const server = http.createServer(app);
 
 const clientOrigin = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+const allowedOriginsList = clientOrigin.split(",").map((o) => o.trim());
 
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (origin === clientOrigin || origin.startsWith("http://localhost:")) {
+      if (
+        origin === clientOrigin ||
+        allowedOriginsList.includes(origin) ||
+        origin.startsWith("http://localhost:") ||
+        origin.endsWith(".vercel.app")
+      ) {
         return callback(null, true);
       }
       return callback(null, true);
@@ -24,7 +30,6 @@ const io = new Server(server, {
   }
 });
 
-// Authenticate WebSocket connections
 io.use(socketAuthMiddleware);
 
 io.on("connection", (socket) => {
@@ -34,11 +39,12 @@ io.on("connection", (socket) => {
 
 const PORT = process.env.PORT || 5001;
 
-// Connect to MongoDB if configured
-connectDB();
-
-server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
+// Only bind to local port when not running as a Vercel serverless function
+if (!process.env.VERCEL) {
+  connectDB();
+  server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+}
 
 export { server, io };
