@@ -14,21 +14,31 @@ import {
 } from "./roomManager.js";
 
 export function registerRoomHandlers(io, socket) {
+  // Helper to ensure authenticated user on socket
+  const getAuthUser = () => {
+    if (!socket.user || !socket.user.userId) {
+      return null;
+    }
+    return socket.user;
+  };
+
   socket.on("create_room", (payload) => {
     try {
-      const username = typeof payload?.username === "string" ? payload.username.trim() : "";
-      if (!username || username.length > 30) {
+      const authUser = getAuthUser();
+      if (!authUser) {
         return socket.emit("action_error", {
           action: "create_room",
-          message: "Username must be between 1 and 30 characters."
+          message: "Authentication required to create a room."
         });
       }
 
-      const userId = typeof payload?.userId === "string" ? payload.userId.trim() : undefined;
+      // Use authoritative authenticated identity
+      const username = authUser.username || (typeof payload?.username === "string" ? payload.username.trim() : "Host");
+      const userId = authUser.userId;
 
       const { room, user } = createRoom({
         username,
-        userId: userId || undefined,
+        userId,
         socketId: socket.id
       });
 
@@ -56,6 +66,14 @@ export function registerRoomHandlers(io, socket) {
 
   socket.on("join_room", (payload) => {
     try {
+      const authUser = getAuthUser();
+      if (!authUser) {
+        return socket.emit("action_error", {
+          action: "join_room",
+          message: "Authentication required to join a room."
+        });
+      }
+
       const roomId = typeof payload?.roomId === "string" ? payload.roomId.trim() : "";
       if (!roomId) {
         return socket.emit("action_error", {
@@ -64,20 +82,14 @@ export function registerRoomHandlers(io, socket) {
         });
       }
 
-      const username = typeof payload?.username === "string" ? payload.username.trim() : "";
-      if (!username || username.length > 30) {
-        return socket.emit("action_error", {
-          action: "join_room",
-          message: "Username must be between 1 and 30 characters."
-        });
-      }
-
-      const userId = typeof payload?.userId === "string" ? payload.userId.trim() : undefined;
+      // Use authoritative authenticated identity
+      const username = authUser.username || (typeof payload?.username === "string" ? payload.username.trim() : "Participant");
+      const userId = authUser.userId;
 
       const result = joinRoom({
         roomId,
         username,
-        userId: userId || undefined,
+        userId,
         socketId: socket.id
       });
 
@@ -128,6 +140,14 @@ export function registerRoomHandlers(io, socket) {
 
   socket.on("play", (payload) => {
     try {
+      const authUser = getAuthUser();
+      if (!authUser) {
+        return socket.emit("action_error", {
+          action: "play",
+          message: "Authentication required."
+        });
+      }
+
       const time = payload?.time;
       const result = playRoom(socket.id, time);
       if (result.error) {
@@ -148,6 +168,14 @@ export function registerRoomHandlers(io, socket) {
 
   socket.on("pause", (payload) => {
     try {
+      const authUser = getAuthUser();
+      if (!authUser) {
+        return socket.emit("action_error", {
+          action: "pause",
+          message: "Authentication required."
+        });
+      }
+
       const time = payload?.time;
       const result = pauseRoom(socket.id, time);
       if (result.error) {
@@ -168,6 +196,14 @@ export function registerRoomHandlers(io, socket) {
 
   socket.on("seek", (payload) => {
     try {
+      const authUser = getAuthUser();
+      if (!authUser) {
+        return socket.emit("action_error", {
+          action: "seek",
+          message: "Authentication required."
+        });
+      }
+
       const time = payload?.time;
       const result = seekRoom(socket.id, time);
       if (result.error) {
@@ -188,6 +224,14 @@ export function registerRoomHandlers(io, socket) {
 
   socket.on("change_video", (payload) => {
     try {
+      const authUser = getAuthUser();
+      if (!authUser) {
+        return socket.emit("action_error", {
+          action: "change_video",
+          message: "Authentication required."
+        });
+      }
+
       const videoId = payload?.videoId;
       const result = changeRoomVideo(socket.id, videoId);
       if (result.error) {
@@ -208,6 +252,14 @@ export function registerRoomHandlers(io, socket) {
 
   socket.on("assign_role", (payload) => {
     try {
+      const authUser = getAuthUser();
+      if (!authUser) {
+        return socket.emit("action_error", {
+          action: "assign_role",
+          message: "Authentication required."
+        });
+      }
+
       const targetUserId = typeof payload?.userId === "string" ? payload.userId.trim() : "";
       if (!targetUserId) {
         return socket.emit("action_error", {
@@ -253,6 +305,14 @@ export function registerRoomHandlers(io, socket) {
 
   socket.on("remove_participant", (payload) => {
     try {
+      const authUser = getAuthUser();
+      if (!authUser) {
+        return socket.emit("action_error", {
+          action: "remove_participant",
+          message: "Authentication required."
+        });
+      }
+
       const targetUserId = typeof payload?.userId === "string" ? payload.userId.trim() : "";
       if (!targetUserId) {
         return socket.emit("action_error", {
@@ -299,6 +359,14 @@ export function registerRoomHandlers(io, socket) {
 
   socket.on("request_control", (payload) => {
     try {
+      const authUser = getAuthUser();
+      if (!authUser) {
+        return socket.emit("action_error", {
+          action: "request_control",
+          message: "Authentication required."
+        });
+      }
+
       const action = typeof payload?.action === "string" ? payload.action.trim() : "";
       const reqPayload =
         payload?.payload !== undefined
@@ -337,6 +405,14 @@ export function registerRoomHandlers(io, socket) {
 
   socket.on("approve_control_request", (payload) => {
     try {
+      const authUser = getAuthUser();
+      if (!authUser) {
+        return socket.emit("action_error", {
+          action: "approve_control_request",
+          message: "Authentication required."
+        });
+      }
+
       const requestId = typeof payload?.requestId === "string" ? payload.requestId.trim() : "";
       if (!requestId) {
         return socket.emit("action_error", {
@@ -357,10 +433,10 @@ export function registerRoomHandlers(io, socket) {
         });
       }
 
-      // 1. Broadcast the resulting sync_state to all room members
+      // Broadcast the resulting sync_state to all room members
       io.to(result.room.id).emit("sync_state", result.playbackState);
 
-      // 2. Notify the requester of approval outcome
+      // Notify the requester of approval outcome
       const requesterSocket = io.sockets.sockets.get(result.request.requester.socketId);
       if (requesterSocket) {
         requesterSocket.emit("control_request_result", {
@@ -380,6 +456,14 @@ export function registerRoomHandlers(io, socket) {
 
   socket.on("reject_control_request", (payload) => {
     try {
+      const authUser = getAuthUser();
+      if (!authUser) {
+        return socket.emit("action_error", {
+          action: "reject_control_request",
+          message: "Authentication required."
+        });
+      }
+
       const requestId = typeof payload?.requestId === "string" ? payload.requestId.trim() : "";
       if (!requestId) {
         return socket.emit("action_error", {

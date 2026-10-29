@@ -1,36 +1,51 @@
 # YouTube Watch Party - Backend
 
-A simple real-time backend service for a synchronized YouTube watch party web application. Built with Node.js, Express, and Socket.IO.
+A real-time backend service for a synchronized YouTube watch party web application. Built with Node.js, Express, Mongoose, and Socket.IO.
 
 ## Features
 
-- Room management: Create and join watch rooms using short room codes.
-- Role-based permissions:
-  - Host: Room creator with full playback controls, ability to promote participants to Moderator, and remove users.
-  - Moderator: Can control video playback and approve participant requests.
-  - Participant: Synchronized viewer. Cannot directly change playback, but can request playback changes.
-- Real-time video sync: Broadcasts play, pause, seek, and video changes to everyone in the room.
-- Control request workflow: Participants can request an action (play, pause, seek, change video), which takes effect once approved by a Host or Moderator.
-- Automatic cleanup: Empty rooms and disconnected sessions are cleaned up automatically.
-- Health check: Simple GET /health endpoint for server monitoring.
+- User Authentication: Secure signup, login, current session (`/api/auth/me`), and logout using salted scrypt password hashing and HMAC-SHA256 JWT tokens.
+- WebSocket Authentication: Socket.IO handshake authentication verifying JWT tokens before allowing connections.
+- Authoritative Identity: User identity (`userId`, `username`, `email`) is resolved directly from authenticated socket sessions, preventing identity spoofing.
+- Room Management: Create and join watch party rooms using unique 6-character room codes.
+- Role-Based Access Control (RBAC):
+  - Host: Full room controls, video playback, promoting Participants to Moderator, demoting Moderators to Participant, and removing participants.
+  - Moderator: Direct playback controls (play, pause, seek, change video) and request approval/rejection.
+  - Participant: Synchronized viewing only. Cannot directly change playback; can submit requests to play, pause, seek, or change video.
+- Playback Synchronization: Server is the single source of truth for `videoId`, `playState`, and `currentTime`.
+- Control Request Workflow: Approval queue allowing Host and Moderator to approve or reject participant requests in real time.
+- Automatic Cleanup: Empty rooms and disconnected sessions are cleaned up automatically.
+- Health Check: `GET /health` endpoint for monitoring.
 
 ## Tech Stack
 
 - Runtime: Node.js (ES modules)
 - Framework: Express.js
+- Database: MongoDB via Mongoose (with in-memory fallback)
 - Real-Time Layer: Socket.IO
+- Cryptography: Node.js built-in `crypto` (scrypt, HMAC-SHA256, timingSafeEqual)
 
 ## Project Structure
 
-```
+```text
 backend/
 ├── src/
-│   ├── app.js               # Express application and CORS setup
+│   ├── app.js               # Express application, CORS, and middleware
 │   ├── config/
-│   │   └── db.js            # Database config helper (optional)
-│   └── socket/
-│       ├── roomHandler.js   # Socket.IO event listeners and dispatchers
-│       └── roomManager.js   # In-memory room state, validation, and permissions
+│   │   └── db.js            # MongoDB / Mongoose connection
+│   ├── controllers/
+│   │   └── authController.js# Signup, login, me, logout handlers
+│   ├── middleware/
+│   │   └── auth.js          # Express and Socket.IO auth middlewares
+│   ├── models/
+│   │   └── User.js          # User schema and repository
+│   ├── routes/
+│   │   └── authRoutes.js    # /api/auth router
+│   ├── socket/
+│   │   ├── roomHandler.js   # Authenticated Socket.IO event handlers
+│   │   └── roomManager.js   # In-memory room state, playback, and permissions
+│   └── utils/
+│       └── crypto.js        # Salted scrypt hashing and JWT token utility
 ├── server.js                # Server entry point (HTTP + Socket.IO)
 ├── package.json
 └── .env.example
@@ -44,15 +59,17 @@ npm install
 ```
 
 2. Configure environment variables:
-Copy the example environment file:
+Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
 
-Default variables:
-```
+Configuration variables:
+```text
 PORT=5001
 CLIENT_ORIGIN=http://localhost:5173
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/watchparty?retryWrites=true&w=majority
+JWT_SECRET=your-secure-jwt-secret-key-at-least-32-chars
 ```
 
 3. Run the server:
@@ -66,56 +83,38 @@ npm run dev
 npm start
 ```
 
-## Health Check
+## HTTP Endpoints
 
-- URL: `http://localhost:5001/health`
-- Method: `GET`
-- Response:
-```json
-{
-  "status": "ok"
-}
-```
+### Authentication
+- `POST /api/auth/signup`: `{ name, email, password, confirmPassword }` -> 201 Created with `{ user, token }` and HttpOnly cookie.
+- `POST /api/auth/login`: `{ email, password }` -> 200 OK with `{ user, token }` and HttpOnly cookie.
+- `GET /api/auth/me`: Requires Bearer token or cookie -> 200 OK with `{ user }`.
+- `POST /api/auth/logout`: Clears session cookie -> 200 OK.
 
-## How It Works
-
-### Flow
-Client connects via Socket.IO -> Server validates input and role permissions -> Updates in-memory room state -> Broadcasts updates to all sockets in that room.
-
-### Video Playback
-The backend does not stream or download YouTube videos. It only tracks and synchronizes the metadata:
-- `videoId` (11-character YouTube ID)
-- `playState` ("playing" or "paused")
-- `currentTime` (playback position in seconds)
-
-The frontend uses the YouTube IFrame Player API to control video playback based on these events.
+### Health
+- `GET /health` -> 200 OK with `{"status": "ok"}`.
 
 ## Socket.IO Events
 
-### Room Events
-- `create_room` (Client to Server): `{ username: "Alice" }` -> Responds with `room_created`.
-- `join_room` (Client to Server): `{ roomId: "a1b2c3", username: "Bob" }` -> Responds with `room_joined`, broadcasts `user_joined` to the room, and sends `sync_state` to the joiner.
-- `leave_room` (Client to Server): Leaves current room, broadcasts `user_left`.
+### Authentication Handshake
+Clients must provide a valid JWT token in `auth: { token }` or in an HttpOnly cookie during handshake. Unauthenticated connections are rejected.
 
-### Host Moderation Events
-- `assign_role` (Host only): `{ userId: "user_123", role: "Moderator" }` -> Broadcasts `role_assigned`.
-- `remove_participant` (Host only): `{ userId: "user_123" }` -> Removes user and broadcasts `participant_removed`.
+### Room Events
+- `create_room`: Emits `room_created` with new room ID and sets authenticated user as `Host`.
+- `join_room`: `{ roomId }` -> Emits `room_joined` with room metadata, broadcasts `user_joined` to room members, and sends `sync_state`.
+- `leave_room`: Leaves room, broadcasts `user_left`.
+
+### Moderation Events (Host only)
+- `assign_role`: `{ userId, role: "Moderator" | "Participant" }` -> Broadcasts `role_assigned`.
+- `remove_participant`: `{ userId }` -> Broadcasts `participant_removed` and ejects target socket.
 
 ### Playback Events (Host and Moderator)
-- `play`: `{ time: 10 }` -> Updates room playState to "playing" and broadcasts `sync_state`.
-- `pause`: `{ time: 25 }` -> Updates room playState to "paused" and broadcasts `sync_state`.
-- `seek`: `{ time: 120 }` -> Updates currentTime and broadcasts `sync_state`.
-- `change_video`: `{ videoId: "dQw4w9WgXcQ" }` -> Sets new video ID, resets currentTime to 0, and broadcasts `sync_state`.
+- `play`: `{ time }` -> Sets room state to `playing` and broadcasts `sync_state`.
+- `pause`: `{ time }` -> Sets room state to `paused` and broadcasts `sync_state`.
+- `seek`: `{ time }` -> Updates `currentTime` and broadcasts `sync_state`.
+- `change_video`: `{ videoId }` -> Sets new video ID, resets `currentTime` to 0, and broadcasts `sync_state`.
 
 ### Participant Control Requests
-- `request_control` (Participant): `{ action: "play|pause|seek|change_video", payload: { time?, videoId? } }` -> Sends `control_requested` to Host and Moderators.
-- `approve_control_request` (Host or Moderator): `{ requestId: "req_123" }` -> Applies the change, broadcasts `sync_state`, and notifies requester via `control_request_result`.
-- `reject_control_request` (Host or Moderator): `{ requestId: "req_123" }` -> Leaves state unchanged and notifies requester via `control_request_result`.
-
-### Error Handling
-- `action_error`: Emitted back to the sender when an invalid action, bad payload, or unauthorized request occurs.
-
-## Notes
-
-- Room state is stored in memory for simplicity and fast synchronization. Rooms reset if the server is restarted.
-- Video IDs must be the standard 11-character YouTube video ID (the frontend should extract this from URLs before sending).
+- `request_control`: `{ action, payload }` -> Sends `control_requested` to Host and Moderator.
+- `approve_control_request`: `{ requestId }` -> Applies action, broadcasts `sync_state`, and sends `control_request_result` to requester.
+- `reject_control_request`: `{ requestId }` -> Leaves state unchanged and sends `control_request_result` to requester.
