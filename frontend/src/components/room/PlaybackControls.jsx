@@ -31,7 +31,6 @@ export default function PlaybackControls({
 
   return (
     <div className="p-4 bg-slate-900 rounded-md border border-slate-700 space-y-4">
-      {/* Time scrubber and status */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span className="font-mono">
@@ -52,15 +51,14 @@ export default function PlaybackControls({
           onChange={onSeekChange}
           onMouseUp={onSeekCommit}
           onTouchEnd={onSeekCommit}
-          className={`w-full h-1.5 bg-slate-700 rounded-lg appearance-none ${
-            isController
+          className={`w-full h-1.5 bg-slate-700 rounded-lg appearance-none ${isController
               ? "cursor-pointer accent-indigo-500"
               : "cursor-not-allowed accent-slate-500 opacity-60"
-          }`}
+            }`}
         />
       </div>
 
-      {/* Controller Controls (Host / Moderator) */}
+
       {isController && (
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
           <button
@@ -71,7 +69,7 @@ export default function PlaybackControls({
             {playState === "playing" ? "Pause" : "Play"}
           </button>
 
-          {/* Change Video Form */}
+
           <form
             onSubmit={handleVideoSubmit}
             className="flex items-center gap-2 flex-grow sm:max-w-md"

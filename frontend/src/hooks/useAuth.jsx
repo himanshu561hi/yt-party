@@ -9,60 +9,44 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Check existing session on mount
+  // Restore authenticated session on mount
   useEffect(() => {
     let isMounted = true;
-
-    async function checkAuth() {
-      try {
-        const currentUser = await authService.getCurrentUser();
-        if (isMounted) {
-          if (currentUser) {
-            setUser(currentUser);
-            connectSocket(authService.getToken());
-          } else {
-            setUser(null);
-          }
+    authService
+      .getCurrentUser()
+      .then((currentUser) => {
+        if (!isMounted) return;
+        if (currentUser) {
+          setUser(currentUser);
+          connectSocket(authService.getToken());
         }
-      } catch {
-        if (isMounted) setUser(null);
-      } finally {
+      })
+      .catch(() => {})
+      .finally(() => {
         if (isMounted) setLoading(false);
-      }
-    }
-
-    checkAuth();
+      });
 
     return () => {
       isMounted = false;
     };
   }, []);
 
-  const login = async (email, password) => {
+  // Shared runner for login & signup
+  const handleAuth = async (authFn) => {
     setError(null);
     try {
-      const data = await authService.login({ email, password });
+      const data = await authFn();
       setUser(data.user);
       connectSocket(data.token);
       return data.user;
     } catch (err) {
-      setError(err.message || "Failed to log in.");
+      setError(err.message || "Authentication failed.");
       throw err;
     }
   };
 
-  const signup = async ({ name, email, password, confirmPassword }) => {
-    setError(null);
-    try {
-      const data = await authService.signup({ name, email, password, confirmPassword });
-      setUser(data.user);
-      connectSocket(data.token);
-      return data.user;
-    } catch (err) {
-      setError(err.message || "Failed to sign up.");
-      throw err;
-    }
-  };
+  const login = (email, password) => handleAuth(() => authService.login({ email, password }));
+  const signup = (formData) => handleAuth(() => authService.signup(formData));
 
   const logout = async () => {
     try {
@@ -73,8 +57,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const clearError = () => setError(null);
-
   return (
     <AuthContext.Provider
       value={{
@@ -84,7 +66,7 @@ export function AuthProvider({ children }) {
         login,
         signup,
         logout,
-        clearError
+        clearError: () => setError(null)
       }}
     >
       {children}
@@ -94,9 +76,6 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (!context) throw new Error("useAuth must be used within an AuthProvider");
   return context;
 }
-
