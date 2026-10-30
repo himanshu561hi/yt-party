@@ -4,9 +4,7 @@ import { Room } from "../models/Room.js";
 const rooms = new Map();
 const socketToRoomMap = new Map();
 
-const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
-
-// Lightweight helper to sync room state with MongoDB
+// Sync in-memory room state with MongoDB
 async function syncRoomToDb(room) {
   try {
     const host = room.participants?.find((p) => p.userId === room.hostUserId);
@@ -31,16 +29,16 @@ async function syncRoomToDb(room) {
       },
       { upsert: true, returnDocument: "after" }
     );
-  } catch (err) {
-    // Non-blocking log
+  } catch {
+    // Non-blocking
   }
 }
 
-// Lightweight helper to update playback state in MongoDB
+// Sync playback updates to MongoDB
 async function syncPlaybackToDb(roomId, updates) {
   try {
     await Room.findOneAndUpdate({ roomId }, { $set: updates });
-  } catch (err) {
+  } catch {
     // Non-blocking
   }
 }
@@ -53,21 +51,13 @@ export function generateRoomId() {
   return roomId;
 }
 
-export function isValidVideoId(videoId) {
-  return typeof videoId === "string" && YOUTUBE_ID_REGEX.test(videoId.trim());
-}
-
-export function isValidSeekTime(time) {
-  return typeof time === "number" && Number.isFinite(time) && time >= 0;
-}
-
 export async function createRoom({ username, userId, socketId }) {
   const roomId = generateRoomId();
   const finalUserId = userId || `user_${crypto.randomUUID().slice(0, 8)}`;
 
   const creator = {
     userId: finalUserId,
-    username,
+    username: username || "Host",
     role: "Host",
     socketId
   };
@@ -85,16 +75,14 @@ export async function createRoom({ username, userId, socketId }) {
   rooms.set(roomId, room);
   socketToRoomMap.set(socketId, { roomId, userId: finalUserId });
 
-  // Persist new room to MongoDB
   await syncRoomToDb(room);
-
   return { room, user: creator };
 }
 
 export async function joinRoom({ roomId, username, userId, socketId }) {
   let room = rooms.get(roomId);
+
   if (!room) {
-    // If room is not in memory, check if it was previously created and stored in MongoDB
     try {
       const dbRoom = await Room.findOne({ roomId });
       if (dbRoom) {
@@ -126,21 +114,19 @@ export async function joinRoom({ roomId, username, userId, socketId }) {
 
   const participant = {
     userId: finalUserId,
-    username,
+    username: username || "Participant",
     role,
     socketId
   };
 
-  const existingIndex = room.participants.findIndex((p) => p.userId === finalUserId);
-  if (existingIndex !== -1) {
-    room.participants[existingIndex] = participant;
+  const existingIdx = room.participants.findIndex((p) => p.userId === finalUserId);
+  if (existingIdx !== -1) {
+    room.participants[existingIdx] = participant;
   } else {
     room.participants.push(participant);
   }
 
   socketToRoomMap.set(socketId, { roomId, userId: finalUserId });
-
-  // Update room in MongoDB
   await syncRoomToDb(room);
 
   return { room, user: participant };
@@ -148,16 +134,12 @@ export async function joinRoom({ roomId, username, userId, socketId }) {
 
 export function leaveRoom(socketId) {
   const session = socketToRoomMap.get(socketId);
-  if (!session) {
-    return null;
-  }
+  if (!session) return null;
 
   socketToRoomMap.delete(socketId);
   const { roomId, userId } = session;
   const room = rooms.get(roomId);
-  if (!room) {
-    return null;
-  }
+  if (!room) return null;
 
   const leavingUser = room.participants.find(
     (p) => p.userId === userId || p.socketId === socketId
@@ -167,7 +149,7 @@ export function leaveRoom(socketId) {
     (p) => p.socketId !== socketId && p.userId !== userId
   );
 
-  // Clean up any pending requests from the leaving user
+  // Clean pending requests from leaving user
   for (const [reqId, req] of room.pendingRequests.entries()) {
     if (req.requester.userId === userId || req.requester.socketId === socketId) {
       room.pendingRequests.delete(reqId);
@@ -178,37 +160,22 @@ export function leaveRoom(socketId) {
   if (room.participants.length === 0) {
     rooms.delete(roomId);
     roomDeleted = true;
-    Room.findOneAndUpdate(
-      { roomId },
-      { $set: { isActive: false, participants: [] } }
-    ).catch(() => {});
+    Room.findOneAndUpdate({ roomId }, { $set: { isActive: false, participants: [] } }).catch(() => {});
   } else {
     syncRoomToDb(room);
   }
 
-  return {
-    roomId,
-    leavingUser,
-    participants: room.participants,
-    roomDeleted
-  };
+  return { roomId, leavingUser, participants: room.participants, roomDeleted };
 }
 
 export function assignRole({ senderSocketId, targetUserId, newRole }) {
   const session = socketToRoomMap.get(senderSocketId);
-  if (!session) {
-    return { error: "You are not in a room." };
-  }
+  if (!session) return { error: "You are not in a room." };
 
   const room = rooms.get(session.roomId);
-  if (!room) {
-    return { error: "Room not found." };
-  }
+  if (!room) return { error: "Room not found." };
 
-  const sender = room.participants.find(
-    (p) => p.socketId === senderSocketId || p.userId === session.userId
-  );
-
+  const sender = room.participants.find((p) => p.socketId === senderSocketId || p.userId === session.userId);
   if (!sender || sender.role !== "Host") {
     return { error: "Unauthorized. Only the Host can assign roles." };
   }
@@ -218,270 +185,102 @@ export function assignRole({ senderSocketId, targetUserId, newRole }) {
   }
 
   const target = room.participants.find((p) => p.userId === targetUserId);
-  if (!target) {
-    return { error: "Target participant not found in this room." };
-  }
-
-  if (target.userId === room.hostUserId) {
-    return { error: "Cannot change the Host's role." };
-  }
+  if (!target) return { error: "Target participant not found in this room." };
+  if (target.userId === room.hostUserId) return { error: "Cannot change the Host's role." };
 
   target.role = newRole;
-
-  // Persist role assignment in MongoDB
   syncRoomToDb(room);
-
   return { room, user: target };
 }
 
 export function removeParticipant({ senderSocketId, targetUserId }) {
   const session = socketToRoomMap.get(senderSocketId);
-  if (!session) {
-    return { error: "You are not in a room." };
-  }
+  if (!session) return { error: "You are not in a room." };
 
   const room = rooms.get(session.roomId);
-  if (!room) {
-    return { error: "Room not found." };
-  }
+  if (!room) return { error: "Room not found." };
 
-  const sender = room.participants.find(
-    (p) => p.socketId === senderSocketId || p.userId === session.userId
-  );
-
+  const sender = room.participants.find((p) => p.socketId === senderSocketId || p.userId === session.userId);
   if (!sender || sender.role !== "Host") {
     return { error: "Unauthorized. Only the Host can remove participants." };
   }
 
-  if (targetUserId === room.hostUserId) {
-    return { error: "Cannot remove the Host from the room." };
-  }
+  if (targetUserId === room.hostUserId) return { error: "Cannot remove the Host from the room." };
 
   const target = room.participants.find((p) => p.userId === targetUserId);
-  if (!target) {
-    return { error: "Target participant not found in this room." };
-  }
+  if (!target) return { error: "Target participant not found in this room." };
 
   room.participants = room.participants.filter((p) => p.userId !== targetUserId);
   socketToRoomMap.delete(target.socketId);
 
-  // Clean up any pending requests from the removed user
   for (const [reqId, req] of room.pendingRequests.entries()) {
     if (req.requester.userId === targetUserId || req.requester.socketId === target.socketId) {
       room.pendingRequests.delete(reqId);
     }
   }
 
-  // Persist updated participant list in MongoDB
   syncRoomToDb(room);
-
   return { room, user: target };
 }
 
-export function canControlPlayback(role) {
-  return role === "Host" || role === "Moderator";
-}
-
-export function checkPlaybackPermission(socketId) {
+// Unified playback control helper
+export function updatePlayback(socketId, action, payload = {}) {
   const session = socketToRoomMap.get(socketId);
-  if (!session) {
-    return { allowed: false, error: "You are not in a room." };
-  }
+  if (!session) return { error: "You are not in a room." };
 
   const room = rooms.get(session.roomId);
-  if (!room) {
-    return { allowed: false, error: "Room not found." };
+  if (!room) return { error: "Room not found." };
+
+  const participant = room.participants.find((p) => p.socketId === socketId || p.userId === session.userId);
+  if (!participant || (participant.role !== "Host" && participant.role !== "Moderator")) {
+    return { error: "Unauthorized. Only Host and Moderator can control playback." };
   }
 
-  const participant = room.participants.find(
-    (p) => p.socketId === socketId || p.userId === session.userId
-  );
-
-  if (!participant) {
-    return { allowed: false, error: "Participant not found." };
+  if (action === "play") {
+    if (typeof payload.time === "number" && payload.time >= 0) room.currentTime = payload.time;
+    room.playState = "playing";
+  } else if (action === "pause") {
+    if (typeof payload.time === "number" && payload.time >= 0) room.currentTime = payload.time;
+    room.playState = "paused";
+  } else if (action === "seek") {
+    if (typeof payload.time === "number" && payload.time >= 0) room.currentTime = payload.time;
+  } else if (action === "change_video") {
+    const videoId = payload.videoId?.trim();
+    if (!videoId || videoId.length !== 11) {
+      return { error: "Invalid YouTube video ID. Must be an 11-character identifier." };
+    }
+    room.videoId = videoId;
+    room.currentTime = 0;
+    room.playState = "paused";
   }
 
-  if (!canControlPlayback(participant.role)) {
-    return {
-      allowed: false,
-      error: "Unauthorized. Only Host and Moderator can control playback.",
-      participant,
-      room
-    };
-  }
-
-  return { allowed: true, participant, room };
-}
-
-export function playRoom(socketId, time) {
-  const perm = checkPlaybackPermission(socketId);
-  if (!perm.allowed) {
-    return { error: perm.error };
-  }
-  if (time !== undefined && !isValidSeekTime(time)) {
-    return { error: "Invalid seek time. Must be a non-negative number." };
-  }
-  const room = perm.room;
-  if (time !== undefined) {
-    room.currentTime = time;
-  }
-  room.playState = "playing";
-
-  // Persist playback state to MongoDB asynchronously
-  syncPlaybackToDb(room.id, {
-    playState: "playing",
+  const playbackState = {
+    videoId: room.videoId,
+    playState: room.playState,
     currentTime: room.currentTime
-  });
-
-  return {
-    room,
-    playbackState: {
-      videoId: room.videoId,
-      playState: room.playState,
-      currentTime: room.currentTime
-    }
   };
+
+  syncPlaybackToDb(room.id, playbackState);
+  return { room, playbackState };
 }
 
-export function pauseRoom(socketId, time) {
-  const perm = checkPlaybackPermission(socketId);
-  if (!perm.allowed) {
-    return { error: perm.error };
-  }
-  if (time !== undefined && !isValidSeekTime(time)) {
-    return { error: "Invalid seek time. Must be a non-negative number." };
-  }
-  const room = perm.room;
-  if (time !== undefined) {
-    room.currentTime = time;
-  }
-  room.playState = "paused";
-
-  // Persist playback state to MongoDB asynchronously
-  syncPlaybackToDb(room.id, {
-    playState: "paused",
-    currentTime: room.currentTime
-  });
-
-  return {
-    room,
-    playbackState: {
-      videoId: room.videoId,
-      playState: room.playState,
-      currentTime: room.currentTime
-    }
-  };
-}
-
-export function seekRoom(socketId, time) {
-  const perm = checkPlaybackPermission(socketId);
-  if (!perm.allowed) {
-    return { error: perm.error };
-  }
-  if (!isValidSeekTime(time)) {
-    return { error: "Invalid seek time. Must be a non-negative number." };
-  }
-  const room = perm.room;
-  room.currentTime = time;
-
-  // Persist playback state to MongoDB asynchronously
-  syncPlaybackToDb(room.id, {
-    currentTime: room.currentTime
-  });
-
-  return {
-    room,
-    playbackState: {
-      videoId: room.videoId,
-      playState: room.playState,
-      currentTime: room.currentTime
-    }
-  };
-}
-
-export function changeRoomVideo(socketId, videoId) {
-  const perm = checkPlaybackPermission(socketId);
-  if (!perm.allowed) {
-    return { error: perm.error };
-  }
-  const trimmedId = typeof videoId === "string" ? videoId.trim() : "";
-  if (!isValidVideoId(trimmedId)) {
-    return { error: "Invalid YouTube video ID. Must be an 11-character identifier." };
-  }
-  const room = perm.room;
-  room.videoId = trimmedId;
-  room.currentTime = 0;
-  room.playState = "paused";
-
-  // Persist playback state to MongoDB asynchronously
-  syncPlaybackToDb(room.id, {
-    videoId: trimmedId,
-    currentTime: 0,
-    playState: "paused"
-  });
-
-  return {
-    room,
-    playbackState: {
-      videoId: room.videoId,
-      playState: room.playState,
-      currentTime: room.currentTime
-    }
-  };
-}
+export const playRoom = (socketId, time) => updatePlayback(socketId, "play", { time });
+export const pauseRoom = (socketId, time) => updatePlayback(socketId, "pause", { time });
+export const seekRoom = (socketId, time) => updatePlayback(socketId, "seek", { time });
+export const changeRoomVideo = (socketId, videoId) => updatePlayback(socketId, "change_video", { videoId });
 
 export function createControlRequest({ socketId, action, payload }) {
   const session = socketToRoomMap.get(socketId);
-  if (!session) {
-    return { error: "You are not in a room." };
-  }
+  if (!session) return { error: "You are not in a room." };
 
   const room = rooms.get(session.roomId);
-  if (!room) {
-    return { error: "Room not found." };
-  }
+  if (!room) return { error: "Room not found." };
 
-  const participant = room.participants.find(
-    (p) => p.socketId === socketId || p.userId === session.userId
-  );
-
-  if (!participant) {
-    return { error: "Participant not found." };
-  }
+  const participant = room.participants.find((p) => p.socketId === socketId || p.userId === session.userId);
+  if (!participant) return { error: "Participant not found." };
 
   if (participant.role !== "Participant") {
-    return {
-      error: "Only participants need to request playback control. Host and Moderator have direct control."
-    };
-  }
-
-  const supportedActions = ["play", "pause", "seek", "change_video"];
-  if (!supportedActions.includes(action)) {
-    return {
-      error: `Unsupported action '${action}'. Allowed actions are play, pause, seek, change_video.`
-    };
-  }
-
-  let validatedPayload = {};
-
-  if (action === "play" || action === "pause") {
-    if (payload?.time !== undefined) {
-      if (!isValidSeekTime(payload.time)) {
-        return { error: "Invalid seek time. Must be a non-negative number." };
-      }
-      validatedPayload.time = payload.time;
-    }
-  } else if (action === "seek") {
-    if (!isValidSeekTime(payload?.time)) {
-      return { error: "Invalid seek time. Must be a non-negative number." };
-    }
-    validatedPayload.time = payload.time;
-  } else if (action === "change_video") {
-    const videoId = typeof payload?.videoId === "string" ? payload.videoId.trim() : "";
-    if (!isValidVideoId(videoId)) {
-      return { error: "Invalid YouTube video ID. Must be an 11-character identifier." };
-    }
-    validatedPayload.videoId = videoId;
+    return { error: "Host and Moderator have direct control. Request not needed." };
   }
 
   const requestId = `req_${crypto.randomUUID().slice(0, 8)}`;
@@ -494,13 +293,13 @@ export function createControlRequest({ socketId, action, payload }) {
       socketId
     },
     action,
-    payload: validatedPayload
+    payload: payload || {}
   };
 
   room.pendingRequests.set(requestId, request);
 
   const approverSocketIds = room.participants
-    .filter((p) => canControlPlayback(p.role))
+    .filter((p) => p.role === "Host" || p.role === "Moderator")
     .map((p) => p.socketId);
 
   return { room, request, approverSocketIds };
@@ -508,119 +307,61 @@ export function createControlRequest({ socketId, action, payload }) {
 
 export function approveControlRequest({ approverSocketId, requestId }) {
   const session = socketToRoomMap.get(approverSocketId);
-  if (!session) {
-    return { error: "You are not in a room." };
-  }
+  if (!session) return { error: "You are not in a room." };
 
   const room = rooms.get(session.roomId);
-  if (!room) {
-    return { error: "Room not found." };
-  }
+  if (!room) return { error: "Room not found." };
 
-  const approver = room.participants.find(
-    (p) => p.socketId === approverSocketId || p.userId === session.userId
-  );
-
-  if (!approver || !canControlPlayback(approver.role)) {
-    return { error: "Unauthorized. Only Host and Moderator can approve control requests." };
+  const approver = room.participants.find((p) => p.socketId === approverSocketId || p.userId === session.userId);
+  if (!approver || (approver.role !== "Host" && approver.role !== "Moderator")) {
+    return { error: "Unauthorized. Only Host and Moderator can approve requests." };
   }
 
   const request = room.pendingRequests.get(requestId);
-  if (!request) {
-    return { error: "Control request not found or already processed." };
-  }
+  if (!request) return { error: "Request not found or already processed." };
 
-  const requesterStillInRoom = room.participants.some(
-    (p) => p.userId === request.requester.userId
-  );
-
-  if (!requesterStillInRoom) {
-    room.pendingRequests.delete(requestId);
-    return { error: "Requester is no longer in the room." };
-  }
-
-  // Remove request so it cannot be processed twice
   room.pendingRequests.delete(requestId);
 
-  // Apply requested playback state change
+  // Apply requested action to room
   if (request.action === "play") {
-    if (request.payload.time !== undefined) {
-      room.currentTime = request.payload.time;
-    }
+    if (typeof request.payload.time === "number") room.currentTime = request.payload.time;
     room.playState = "playing";
   } else if (request.action === "pause") {
-    if (request.payload.time !== undefined) {
-      room.currentTime = request.payload.time;
-    }
+    if (typeof request.payload.time === "number") room.currentTime = request.payload.time;
     room.playState = "paused";
   } else if (request.action === "seek") {
-    room.currentTime = request.payload.time;
+    if (typeof request.payload.time === "number") room.currentTime = request.payload.time;
   } else if (request.action === "change_video") {
     room.videoId = request.payload.videoId;
     room.currentTime = 0;
     room.playState = "paused";
   }
 
-  // Persist updated state to MongoDB asynchronously
-  syncPlaybackToDb(room.id, {
+  const playbackState = {
     videoId: room.videoId,
     playState: room.playState,
     currentTime: room.currentTime
-  });
-
-  return {
-    room,
-    request,
-    playbackState: {
-      videoId: room.videoId,
-      playState: room.playState,
-      currentTime: room.currentTime
-    }
   };
+
+  syncPlaybackToDb(room.id, playbackState);
+  return { room, request, playbackState };
 }
 
 export function rejectControlRequest({ rejecterSocketId, requestId }) {
   const session = socketToRoomMap.get(rejecterSocketId);
-  if (!session) {
-    return { error: "You are not in a room." };
-  }
+  if (!session) return { error: "You are not in a room." };
 
   const room = rooms.get(session.roomId);
-  if (!room) {
-    return { error: "Room not found." };
-  }
+  if (!room) return { error: "Room not found." };
 
-  const rejecter = room.participants.find(
-    (p) => p.socketId === rejecterSocketId || p.userId === session.userId
-  );
-
-  if (!rejecter || !canControlPlayback(rejecter.role)) {
-    return { error: "Unauthorized. Only Host and Moderator can reject control requests." };
+  const rejecter = room.participants.find((p) => p.socketId === rejecterSocketId || p.userId === session.userId);
+  if (!rejecter || (rejecter.role !== "Host" && rejecter.role !== "Moderator")) {
+    return { error: "Unauthorized. Only Host and Moderator can reject requests." };
   }
 
   const request = room.pendingRequests.get(requestId);
-  if (!request) {
-    return { error: "Control request not found or already processed." };
-  }
+  if (!request) return { error: "Request not found or already processed." };
 
-  // Remove request so it cannot be processed twice
   room.pendingRequests.delete(requestId);
-
-  return {
-    room,
-    request
-  };
-}
-
-export function getRoom(roomId) {
-  return rooms.get(roomId) || null;
-}
-
-export function getRoomsCount() {
-  return rooms.size;
-}
-
-export function resetRooms() {
-  rooms.clear();
-  socketToRoomMap.clear();
+  return { room, request };
 }

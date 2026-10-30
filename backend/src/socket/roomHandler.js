@@ -4,49 +4,28 @@ import {
   leaveRoom,
   assignRole,
   removeParticipant,
-  playRoom,
-  pauseRoom,
-  seekRoom,
-  changeRoomVideo,
+  updatePlayback,
   createControlRequest,
   approveControlRequest,
   rejectControlRequest
 } from "./roomManager.js";
 
 export function registerRoomHandlers(io, socket) {
-  // Helper to ensure authenticated user on socket
-  const getAuthUser = () => {
-    if (!socket.user || !socket.user.userId) {
-      return null;
-    }
-    return socket.user;
-  };
+  const user = socket.user || {};
 
+  // Create room
   socket.on("create_room", async (payload) => {
     try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "create_room",
-          message: "Authentication required to create a room."
-        });
-      }
-
-      // Use authoritative authenticated identity
-      const username = authUser.username || (typeof payload?.username === "string" ? payload.username.trim() : "Host");
-      const userId = authUser.userId;
-
-      const { room, user } = await createRoom({
-        username,
-        userId,
+      const { room, user: hostUser } = await createRoom({
+        username: user.username || payload?.username,
+        userId: user.userId,
         socketId: socket.id
       });
 
       socket.join(room.id);
-
       socket.emit("room_created", {
         roomId: room.id,
-        user,
+        user: hostUser,
         room: {
           id: room.id,
           hostUserId: room.hostUserId,
@@ -56,58 +35,36 @@ export function registerRoomHandlers(io, socket) {
           currentTime: room.currentTime
         }
       });
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "create_room",
-        message: "Failed to create room."
-      });
+    } catch {
+      socket.emit("action_error", { action: "create_room", message: "Failed to create room." });
     }
   });
 
+  // Join room
   socket.on("join_room", async (payload) => {
     try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "join_room",
-          message: "Authentication required to join a room."
-        });
-      }
-
-      const roomId = typeof payload?.roomId === "string" ? payload.roomId.trim() : "";
+      const roomId = payload?.roomId?.trim();
       if (!roomId) {
-        return socket.emit("action_error", {
-          action: "join_room",
-          message: "Room ID is required."
-        });
+        return socket.emit("action_error", { action: "join_room", message: "Room ID is required." });
       }
-
-      // Use authoritative authenticated identity
-      const username = authUser.username || (typeof payload?.username === "string" ? payload.username.trim() : "Participant");
-      const userId = authUser.userId;
 
       const result = await joinRoom({
         roomId,
-        username,
-        userId,
+        username: user.username || payload?.username,
+        userId: user.userId,
         socketId: socket.id
       });
 
       if (result.error) {
-        return socket.emit("action_error", {
-          action: "join_room",
-          message: result.error
-        });
+        return socket.emit("action_error", { action: "join_room", message: result.error });
       }
 
-      const { room, user } = result;
-
+      const { room, user: joinedUser } = result;
       socket.join(room.id);
 
-      // Return current room information and playback state to the joining user
       socket.emit("room_joined", {
         roomId: room.id,
-        user,
+        user: joinedUser,
         room: {
           id: room.id,
           hostUserId: room.hostUserId,
@@ -118,414 +75,154 @@ export function registerRoomHandlers(io, socket) {
         }
       });
 
-      // Also deliver direct sync_state event so client aligns immediately
       socket.emit("sync_state", {
         videoId: room.videoId,
         playState: room.playState,
         currentTime: room.currentTime
       });
 
-      // Broadcast updated participant list to existing room members
       socket.to(room.id).emit("user_joined", {
-        user,
+        user: joinedUser,
         participants: room.participants
       });
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "join_room",
-        message: "Failed to join room."
-      });
+    } catch {
+      socket.emit("action_error", { action: "join_room", message: "Failed to join room." });
     }
   });
 
-  socket.on("play", (payload) => {
-    try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "play",
-          message: "Authentication required."
-        });
-      }
-
-      const time = payload?.time;
-      const result = playRoom(socket.id, time);
-      if (result.error) {
-        return socket.emit("action_error", {
-          action: "play",
-          message: result.error
-        });
-      }
-
-      io.to(result.room.id).emit("sync_state", result.playbackState);
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "play",
-        message: "Failed to play."
-      });
+  // Playback control helper (handles play, pause, seek, change_video)
+  const handlePlayback = (action, payload) => {
+    const result = updatePlayback(socket.id, action, payload);
+    if (result.error) {
+      return socket.emit("action_error", { action, message: result.error });
     }
-  });
+    io.to(result.room.id).emit("sync_state", result.playbackState);
+  };
 
-  socket.on("pause", (payload) => {
-    try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "pause",
-          message: "Authentication required."
-        });
-      }
+  socket.on("play", (payload) => handlePlayback("play", payload));
+  socket.on("pause", (payload) => handlePlayback("pause", payload));
+  socket.on("seek", (payload) => handlePlayback("seek", payload));
+  socket.on("change_video", (payload) => handlePlayback("change_video", payload));
 
-      const time = payload?.time;
-      const result = pauseRoom(socket.id, time);
-      if (result.error) {
-        return socket.emit("action_error", {
-          action: "pause",
-          message: result.error
-        });
-      }
-
-      io.to(result.room.id).emit("sync_state", result.playbackState);
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "pause",
-        message: "Failed to pause."
-      });
-    }
-  });
-
-  socket.on("seek", (payload) => {
-    try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "seek",
-          message: "Authentication required."
-        });
-      }
-
-      const time = payload?.time;
-      const result = seekRoom(socket.id, time);
-      if (result.error) {
-        return socket.emit("action_error", {
-          action: "seek",
-          message: result.error
-        });
-      }
-
-      io.to(result.room.id).emit("sync_state", result.playbackState);
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "seek",
-        message: "Failed to seek."
-      });
-    }
-  });
-
-  socket.on("change_video", (payload) => {
-    try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "change_video",
-          message: "Authentication required."
-        });
-      }
-
-      const videoId = payload?.videoId;
-      const result = changeRoomVideo(socket.id, videoId);
-      if (result.error) {
-        return socket.emit("action_error", {
-          action: "change_video",
-          message: result.error
-        });
-      }
-
-      io.to(result.room.id).emit("sync_state", result.playbackState);
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "change_video",
-        message: "Failed to change video."
-      });
-    }
-  });
-
+  // Role assignment (Host only)
   socket.on("assign_role", (payload) => {
-    try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "assign_role",
-          message: "Authentication required."
-        });
-      }
-
-      const targetUserId = typeof payload?.userId === "string" ? payload.userId.trim() : "";
-      if (!targetUserId) {
-        return socket.emit("action_error", {
-          action: "assign_role",
-          message: "Target user ID is required."
-        });
-      }
-
-      const role = typeof payload?.role === "string" ? payload.role.trim() : "";
-      if (!role) {
-        return socket.emit("action_error", {
-          action: "assign_role",
-          message: "Role is required."
-        });
-      }
-
-      const result = assignRole({
-        senderSocketId: socket.id,
-        targetUserId,
-        newRole: role
-      });
-
-      if (result.error) {
-        return socket.emit("action_error", {
-          action: "assign_role",
-          message: result.error
-        });
-      }
-
-      const { room, user } = result;
-
-      io.to(room.id).emit("role_assigned", {
-        user,
-        participants: room.participants
-      });
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "assign_role",
-        message: "Failed to assign role."
-      });
+    const result = assignRole({
+      senderSocketId: socket.id,
+      targetUserId: payload?.userId,
+      newRole: payload?.role
+    });
+    if (result.error) {
+      return socket.emit("action_error", { action: "assign_role", message: result.error });
     }
+    io.to(result.room.id).emit("role_assigned", {
+      user: result.user,
+      participants: result.room.participants
+    });
   });
 
+  // Remove participant (Host only)
   socket.on("remove_participant", (payload) => {
-    try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "remove_participant",
-          message: "Authentication required."
-        });
-      }
+    const result = removeParticipant({
+      senderSocketId: socket.id,
+      targetUserId: payload?.userId
+    });
+    if (result.error) {
+      return socket.emit("action_error", { action: "remove_participant", message: result.error });
+    }
 
-      const targetUserId = typeof payload?.userId === "string" ? payload.userId.trim() : "";
-      if (!targetUserId) {
-        return socket.emit("action_error", {
-          action: "remove_participant",
-          message: "Target user ID is required."
-        });
-      }
-
-      const result = removeParticipant({
-        senderSocketId: socket.id,
-        targetUserId
-      });
-
-      if (result.error) {
-        return socket.emit("action_error", {
-          action: "remove_participant",
-          message: result.error
-        });
-      }
-
-      const { room, user: removedUser } = result;
-
-      const targetSocket = io.sockets.sockets.get(removedUser.socketId);
-      if (targetSocket) {
-        targetSocket.leave(room.id);
-        targetSocket.emit("participant_removed", {
-          user: removedUser,
-          message: "You have been removed from the room by the host.",
-          removed: true
-        });
-      }
-
-      io.to(room.id).emit("participant_removed", {
-        user: removedUser,
-        participants: room.participants
-      });
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "remove_participant",
-        message: "Failed to remove participant."
+    const targetSocket = io.sockets.sockets.get(result.user.socketId);
+    if (targetSocket) {
+      targetSocket.leave(result.room.id);
+      targetSocket.emit("participant_removed", {
+        user: result.user,
+        message: "You have been removed from the room by the host.",
+        removed: true
       });
     }
+
+    io.to(result.room.id).emit("participant_removed", {
+      user: result.user,
+      participants: result.room.participants
+    });
   });
 
+  // Control request by participant
   socket.on("request_control", (payload) => {
-    try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "request_control",
-          message: "Authentication required."
-        });
-      }
-
-      const action = typeof payload?.action === "string" ? payload.action.trim() : "";
-      const reqPayload =
-        payload?.payload !== undefined
-          ? payload.payload
-          : { time: payload?.time, videoId: payload?.videoId };
-
-      const result = createControlRequest({
-        socketId: socket.id,
-        action,
-        payload: reqPayload
-      });
-
-      if (result.error) {
-        return socket.emit("action_error", {
-          action: "request_control",
-          message: result.error
-        });
-      }
-
-      // Notify Host and Moderators in the same room
-      for (const approverSocketId of result.approverSocketIds) {
-        io.to(approverSocketId).emit("control_requested", {
-          requestId: result.request.id,
-          requester: result.request.requester,
-          action: result.request.action,
-          payload: result.request.payload
-        });
-      }
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "request_control",
-        message: "Failed to submit control request."
+    const result = createControlRequest({
+      socketId: socket.id,
+      action: payload?.action,
+      payload: payload?.payload !== undefined ? payload.payload : { time: payload?.time, videoId: payload?.videoId }
+    });
+    if (result.error) {
+      return socket.emit("action_error", { action: "request_control", message: result.error });
+    }
+    for (const approverId of result.approverSocketIds) {
+      io.to(approverId).emit("control_requested", {
+        requestId: result.request.id,
+        requester: result.request.requester,
+        action: result.request.action,
+        payload: result.request.payload
       });
     }
   });
 
+  // Approve control request (Host / Moderator)
   socket.on("approve_control_request", (payload) => {
-    try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "approve_control_request",
-          message: "Authentication required."
-        });
-      }
+    const result = approveControlRequest({
+      approverSocketId: socket.id,
+      requestId: payload?.requestId
+    });
+    if (result.error) {
+      return socket.emit("action_error", { action: "approve_control_request", message: result.error });
+    }
 
-      const requestId = typeof payload?.requestId === "string" ? payload.requestId.trim() : "";
-      if (!requestId) {
-        return socket.emit("action_error", {
-          action: "approve_control_request",
-          message: "Request ID is required."
-        });
-      }
+    io.to(result.room.id).emit("sync_state", result.playbackState);
 
-      const result = approveControlRequest({
-        approverSocketId: socket.id,
-        requestId
-      });
-
-      if (result.error) {
-        return socket.emit("action_error", {
-          action: "approve_control_request",
-          message: result.error
-        });
-      }
-
-      // Broadcast the resulting sync_state to all room members
-      io.to(result.room.id).emit("sync_state", result.playbackState);
-
-      // Notify the requester of approval outcome
-      const requesterSocket = io.sockets.sockets.get(result.request.requester.socketId);
-      if (requesterSocket) {
-        requesterSocket.emit("control_request_result", {
-          requestId: result.request.id,
-          status: "approved",
-          action: result.request.action,
-          message: "Your control request was approved."
-        });
-      }
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "approve_control_request",
-        message: "Failed to approve control request."
+    const requesterSocket = io.sockets.sockets.get(result.request.requester.socketId);
+    if (requesterSocket) {
+      requesterSocket.emit("control_request_result", {
+        requestId: result.request.id,
+        status: "approved",
+        action: result.request.action,
+        message: "Your control request was approved."
       });
     }
   });
 
+  // Reject control request (Host / Moderator)
   socket.on("reject_control_request", (payload) => {
-    try {
-      const authUser = getAuthUser();
-      if (!authUser) {
-        return socket.emit("action_error", {
-          action: "reject_control_request",
-          message: "Authentication required."
-        });
-      }
+    const result = rejectControlRequest({
+      rejecterSocketId: socket.id,
+      requestId: payload?.requestId
+    });
+    if (result.error) {
+      return socket.emit("action_error", { action: "reject_control_request", message: result.error });
+    }
 
-      const requestId = typeof payload?.requestId === "string" ? payload.requestId.trim() : "";
-      if (!requestId) {
-        return socket.emit("action_error", {
-          action: "reject_control_request",
-          message: "Request ID is required."
-        });
-      }
-
-      const result = rejectControlRequest({
-        rejecterSocketId: socket.id,
-        requestId
-      });
-
-      if (result.error) {
-        return socket.emit("action_error", {
-          action: "reject_control_request",
-          message: result.error
-        });
-      }
-
-      // Notify the requester of rejection outcome
-      const requesterSocket = io.sockets.sockets.get(result.request.requester.socketId);
-      if (requesterSocket) {
-        requesterSocket.emit("control_request_result", {
-          requestId: result.request.id,
-          status: "rejected",
-          action: result.request.action,
-          message: "Your control request was rejected."
-        });
-      }
-    } catch (err) {
-      socket.emit("action_error", {
-        action: "reject_control_request",
-        message: "Failed to reject control request."
+    const requesterSocket = io.sockets.sockets.get(result.request.requester.socketId);
+    if (requesterSocket) {
+      requesterSocket.emit("control_request_result", {
+        requestId: result.request.id,
+        status: "rejected",
+        action: result.request.action,
+        message: "Your control request was rejected."
       });
     }
   });
 
+  // Leave room & disconnect handling
   const handleLeave = () => {
-    try {
-      const result = leaveRoom(socket.id);
-      if (!result) return;
-
-      const { roomId, leavingUser, participants, roomDeleted } = result;
-      socket.leave(roomId);
-
-      if (!roomDeleted) {
-        io.to(roomId).emit("user_left", {
-          user: leavingUser,
-          participants
-        });
-      }
-    } catch (err) {
-      // Safe error handling without server crash
+    const result = leaveRoom(socket.id);
+    if (!result) return;
+    socket.leave(result.roomId);
+    if (!result.roomDeleted) {
+      io.to(result.roomId).emit("user_left", {
+        user: result.leavingUser,
+        participants: result.participants
+      });
     }
   };
 
-  socket.on("leave_room", () => {
-    handleLeave();
-  });
-
-  socket.on("disconnect", () => {
-    handleLeave();
-  });
+  socket.on("leave_room", handleLeave);
+  socket.on("disconnect", handleLeave);
 }
