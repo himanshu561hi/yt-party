@@ -6,110 +6,77 @@ import PendingRequests from "../components/room/PendingRequests.jsx";
 import ParticipantList from "../components/room/ParticipantList.jsx";
 
 export default function RoomPage({ roomState }) {
-  const {
-    currentRoom,
-    pendingRequests,
-    requestStatus,
-    localTime,
-    duration,
-    participantSeekTime,
-    copied,
-    isHost,
-    isController,
-    handleLeaveRoom,
-    handleCopyCode,
-    handleTogglePlay,
-    handleSeekChange,
-    handleSeekCommit,
-    handleChangeVideo,
-    handleAssignRole,
-    handleRemoveParticipant,
-    handleApproveRequest,
-    handleRejectRequest,
-    handleRequestPlayPause,
-    handleParticipantSeekChange,
-    handleRequestSeek,
-    handleRequestChangeVideo,
-    handlePlayerTimeUpdate,
-    setError,
-    clearRequestStatus
-  } = roomState;
+  const { currentRoom, isHost, isController, pendingRequests } = roomState;
 
   if (!currentRoom) return null;
 
   return (
     <div className="space-y-6">
-      {/* Room Information Bar */}
       <RoomHeader
         roomId={currentRoom.roomId}
         role={currentRoom.role}
         username={currentRoom.username}
-        copied={copied}
-        onCopyCode={handleCopyCode}
-        onLeaveRoom={handleLeaveRoom}
+        copied={roomState.copied}
+        onCopyCode={roomState.handleCopyCode}
+        onLeaveRoom={roomState.handleLeaveRoom}
       />
 
-      {/* Video Stage and Custom Playback Controls */}
       <div className="space-y-4">
         <YouTubePlayer
           videoId={currentRoom.videoId}
           playState={currentRoom.playState}
           currentTime={currentRoom.currentTime}
           isController={isController}
-          onTogglePlay={handleTogglePlay}
-          onTimeUpdate={handlePlayerTimeUpdate}
-          onError={(msg) => setError(msg)}
+          onTogglePlay={roomState.handleTogglePlay}
+          onTimeUpdate={roomState.handlePlayerTimeUpdate}
+          onError={roomState.setError}
         />
 
         <PlaybackControls
           playState={currentRoom.playState}
-          localTime={localTime}
-          duration={duration}
+          localTime={roomState.localTime}
+          duration={roomState.duration}
           isController={isController}
-          onTogglePlay={handleTogglePlay}
-          onSeekChange={handleSeekChange}
-          onSeekCommit={handleSeekCommit}
-          onChangeVideo={handleChangeVideo}
-          onError={setError}
+          onTogglePlay={roomState.handleTogglePlay}
+          onSeekChange={roomState.handleSeekChange}
+          onSeekCommit={roomState.handleSeekCommit}
+          onChangeVideo={roomState.handleChangeVideo}
+          onError={roomState.setError}
         />
 
-        {/* Participant Request Controls (only shown for Participants) */}
         {!isController && (
           <div className="p-4 bg-slate-900 rounded-md border border-slate-700">
             <ControlRequestForm
               playState={currentRoom.playState}
-              duration={duration}
-              participantSeekTime={participantSeekTime}
-              requestStatus={requestStatus}
-              onRequestPlayPause={handleRequestPlayPause}
-              onParticipantSeekChange={handleParticipantSeekChange}
-              onRequestSeek={handleRequestSeek}
-              onRequestChangeVideo={handleRequestChangeVideo}
-              onClearRequestStatus={clearRequestStatus}
-              onError={setError}
+              duration={roomState.duration}
+              participantSeekTime={roomState.participantSeekTime}
+              requestStatus={roomState.requestStatus}
+              onRequestPlayPause={roomState.handleRequestPlayPause}
+              onParticipantSeekChange={roomState.handleParticipantSeekChange}
+              onRequestSeek={roomState.handleRequestSeek}
+              onRequestChangeVideo={roomState.handleRequestChangeVideo}
+              onClearRequestStatus={roomState.clearRequestStatus}
+              onError={roomState.setError}
             />
           </div>
         )}
       </div>
 
-      {/* Pending Control Requests Queue (Host and Moderator) */}
       {isController && pendingRequests.length > 0 && (
         <PendingRequests
           pendingRequests={pendingRequests}
-          onApprove={handleApproveRequest}
-          onReject={handleRejectRequest}
+          onApprove={roomState.handleApproveRequest}
+          onReject={roomState.handleRejectRequest}
         />
       )}
 
-      {/* Participant Roster & Role Management */}
       <ParticipantList
         participants={currentRoom.participants}
         currentUserId={currentRoom.userId}
         isHost={isHost}
-        onAssignRole={handleAssignRole}
-        onRemoveParticipant={handleRemoveParticipant}
+        onAssignRole={roomState.handleAssignRole}
+        onRemoveParticipant={roomState.handleRemoveParticipant}
       />
     </div>
   );
 }
-

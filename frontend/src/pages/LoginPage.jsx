@@ -6,9 +6,7 @@ export default function LoginPage({ onNavigateToSignup, onLoginSuccess }) {
 
   const handleLogin = async (email, password) => {
     await login(email, password);
-    if (onLoginSuccess) {
-      onLoginSuccess();
-    }
+    onLoginSuccess?.();
   };
 
   return (
@@ -22,7 +20,7 @@ export default function LoginPage({ onNavigateToSignup, onLoginSuccess }) {
         </p>
       </header>
 
-      <div className="bg-slate-800/80 border border-slate-700/80 rounded-lg p-6 shadow-xl">
+      <div className="bg-slate-900/60 border border-slate-700/60 rounded-lg p-6 shadow-xl">
         <LoginForm
           onSubmit={handleLogin}
           error={error}

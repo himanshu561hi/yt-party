@@ -13,19 +13,18 @@ export default function HomePage({ onCreateRoom, onJoinRoom, isSubmitting }) {
 
   const handleJoin = (e) => {
     e.preventDefault();
-    setLocalError("");
     const trimmed = roomCode.trim();
     if (!trimmed) {
       setLocalError("Please enter a room code.");
       return;
     }
+    setLocalError("");
     onJoinRoom(trimmed, user?.name || "Participant");
   };
 
   return (
-    <div className="max-w-xl w-full mx-auto space-y-6">
-      {/* User Greeting Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-800/80 border border-slate-700/80 rounded-lg">
+    <div className="max-w-2xl w-full mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-slate-900/60 border border-slate-700/60 rounded-lg">
         <div>
           <span className="text-xs text-slate-400 block">Signed in as</span>
           <span className="text-sm font-semibold text-white">
@@ -33,7 +32,6 @@ export default function HomePage({ onCreateRoom, onJoinRoom, isSubmitting }) {
             <span className="text-xs font-normal text-slate-400">({user?.email})</span>
           </span>
         </div>
-
         <button
           type="button"
           onClick={logout}
@@ -65,65 +63,55 @@ export default function HomePage({ onCreateRoom, onJoinRoom, isSubmitting }) {
         </div>
       )}
 
-      {/* Host a New Session Card */}
-      <section className="p-5 bg-slate-800/80 border border-slate-700/80 rounded-lg space-y-3 shadow-lg">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-200 mb-1">
-            Host a New Session
-          </h2>
-          <p className="text-xs text-slate-400">
-            Start a new synchronized room as Host and invite friends using a room code.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleCreate}
-          disabled={isSubmitting}
-          className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-sm font-medium transition cursor-pointer disabled:opacity-50"
-        >
-          {isSubmitting ? "Creating Room..." : "Create Room"}
-        </button>
-      </section>
-
-      {/* Divider */}
-      <div className="relative flex py-1 items-center">
-        <div className="flex-grow border-t border-slate-700" />
-        <span className="flex-shrink mx-3 text-xs uppercase tracking-wider text-slate-500">
-          or join existing
-        </span>
-        <div className="flex-grow border-t border-slate-700" />
-      </div>
-
-      {/* Join Room Card */}
-      <section className="p-5 bg-slate-800/80 border border-slate-700/80 rounded-lg space-y-3 shadow-lg">
-        <div>
-          <h2 className="text-sm font-semibold text-slate-200 mb-1">
-            Join with Room Code
-          </h2>
-          <p className="text-xs text-slate-400">
-            Enter the 6-character room code shared by the room host.
-          </p>
-        </div>
-
-        <form onSubmit={handleJoin} className="space-y-3">
-          <input
-            type="text"
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value)}
-            placeholder="e.g. a1b2c3"
-            disabled={isSubmitting}
-            className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
-          />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <section className="flex flex-col justify-between p-5 bg-slate-900/60 border border-slate-700/60 rounded-lg space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-200 mb-1">
+              Host a New Session
+            </h2>
+            <p className="text-xs text-slate-400">
+              Start a new room as Host and invite friends using your unique room code.
+            </p>
+          </div>
           <button
-            type="submit"
+            type="button"
+            onClick={handleCreate}
             disabled={isSubmitting}
-            className="w-full py-2.5 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-md text-sm font-medium transition cursor-pointer disabled:opacity-50"
+            className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-sm font-medium transition cursor-pointer disabled:opacity-50"
           >
-            {isSubmitting ? "Joining Room..." : "Join Room"}
+            {isSubmitting ? "Creating Room..." : "Create Room"}
           </button>
-        </form>
-      </section>
+        </section>
+
+        <section className="flex flex-col justify-between p-5 bg-slate-900/60 border border-slate-700/60 rounded-lg space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-200 mb-1">
+              Join Existing Room
+            </h2>
+            <p className="text-xs text-slate-400">
+              Enter the room code shared by your host to join the watch party.
+            </p>
+          </div>
+
+          <form onSubmit={handleJoin} className="space-y-3">
+            <input
+              type="text"
+              value={roomCode}
+              onChange={(e) => setRoomCode(e.target.value)}
+              placeholder="e.g. a1b2c3"
+              disabled={isSubmitting}
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-2.5 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-md text-sm font-medium transition cursor-pointer disabled:opacity-50"
+            >
+              {isSubmitting ? "Joining Room..." : "Join Room"}
+            </button>
+          </form>
+        </section>
+      </div>
     </div>
   );
 }
