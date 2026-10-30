@@ -22,7 +22,7 @@ export function registerRoomHandlers(io, socket) {
     return socket.user;
   };
 
-  socket.on("create_room", (payload) => {
+  socket.on("create_room", async (payload) => {
     try {
       const authUser = getAuthUser();
       if (!authUser) {
@@ -36,7 +36,7 @@ export function registerRoomHandlers(io, socket) {
       const username = authUser.username || (typeof payload?.username === "string" ? payload.username.trim() : "Host");
       const userId = authUser.userId;
 
-      const { room, user } = createRoom({
+      const { room, user } = await createRoom({
         username,
         userId,
         socketId: socket.id
@@ -64,7 +64,7 @@ export function registerRoomHandlers(io, socket) {
     }
   });
 
-  socket.on("join_room", (payload) => {
+  socket.on("join_room", async (payload) => {
     try {
       const authUser = getAuthUser();
       if (!authUser) {
@@ -86,7 +86,7 @@ export function registerRoomHandlers(io, socket) {
       const username = authUser.username || (typeof payload?.username === "string" ? payload.username.trim() : "Participant");
       const userId = authUser.userId;
 
-      const result = joinRoom({
+      const result = await joinRoom({
         roomId,
         username,
         userId,

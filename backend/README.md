@@ -91,6 +91,10 @@ npm start
 - `GET /api/auth/me`: Requires Bearer token or cookie -> 200 OK with `{ user }`.
 - `POST /api/auth/logout`: Clears session cookie -> 200 OK.
 
+### Rooms (MongoDB Persistence)
+- `GET /api/rooms`: Returns active rooms stored in MongoDB.
+- `GET /api/rooms/:roomId`: Returns details and playback metadata of a room by room code.
+
 ### Health
 - `GET /health` -> 200 OK with `{"status": "ok"}`.
 

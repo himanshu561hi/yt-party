@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/authRoutes.js";
+import roomRoutes from "./routes/roomRoutes.js";
 import { parseCookies } from "./utils/crypto.js";
 
 const app = express();
@@ -45,6 +46,9 @@ app.use((req, res, next) => {
 
 // Authentication endpoints
 app.use("/api/auth", authRoutes);
+
+// Room endpoints (MongoDB persistence)
+app.use("/api/rooms", roomRoutes);
 
 // Health check endpoint
 app.get("/health", (req, res) => {

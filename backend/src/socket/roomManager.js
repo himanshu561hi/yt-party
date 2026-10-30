@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { RoomRepository } from "../models/Room.js";
 
 const rooms = new Map();
 const socketToRoomMap = new Map();
@@ -21,7 +22,7 @@ export function isValidSeekTime(time) {
   return typeof time === "number" && Number.isFinite(time) && time >= 0;
 }
 
-export function createRoom({ username, userId, socketId }) {
+export async function createRoom({ username, userId, socketId }) {
   const roomId = generateRoomId();
   const finalUserId = userId || `user_${crypto.randomUUID().slice(0, 8)}`;
 
@@ -45,13 +46,36 @@ export function createRoom({ username, userId, socketId }) {
   rooms.set(roomId, room);
   socketToRoomMap.set(socketId, { roomId, userId: finalUserId });
 
+  // Persist new room to MongoDB
+  await RoomRepository.saveRoom(room);
+
   return { room, user: creator };
 }
 
-export function joinRoom({ roomId, username, userId, socketId }) {
-  const room = rooms.get(roomId);
+export async function joinRoom({ roomId, username, userId, socketId }) {
+  let room = rooms.get(roomId);
   if (!room) {
-    return { error: "Room not found." };
+    // If room is not in memory, check if it was previously created and stored in MongoDB
+    const dbRoom = await RoomRepository.findByRoomId(roomId);
+    if (dbRoom) {
+      room = {
+        id: dbRoom.roomId,
+        hostUserId: dbRoom.hostUserId,
+        participants: (dbRoom.participants || []).map((p) => ({
+          userId: p.userId,
+          username: p.username,
+          role: p.role,
+          socketId: p.socketId
+        })),
+        videoId: dbRoom.videoId || "dQw4w9WgXcQ",
+        playState: dbRoom.playState || "paused",
+        currentTime: dbRoom.currentTime || 0,
+        pendingRequests: new Map()
+      };
+      rooms.set(roomId, room);
+    } else {
+      return { error: "Room not found." };
+    }
   }
 
   const finalUserId = userId || `user_${crypto.randomUUID().slice(0, 8)}`;
@@ -72,6 +96,9 @@ export function joinRoom({ roomId, username, userId, socketId }) {
   }
 
   socketToRoomMap.set(socketId, { roomId, userId: finalUserId });
+
+  // Update room in MongoDB
+  await RoomRepository.saveRoom(room);
 
   return { room, user: participant };
 }
@@ -108,6 +135,9 @@ export function leaveRoom(socketId) {
   if (room.participants.length === 0) {
     rooms.delete(roomId);
     roomDeleted = true;
+    RoomRepository.markInactive(roomId).catch(() => {});
+  } else {
+    RoomRepository.saveRoom(room).catch(() => {});
   }
 
   return {
@@ -152,6 +182,9 @@ export function assignRole({ senderSocketId, targetUserId, newRole }) {
 
   target.role = newRole;
 
+  // Persist role assignment in MongoDB
+  RoomRepository.saveRoom(room).catch(() => {});
+
   return { room, user: target };
 }
 
@@ -192,6 +225,9 @@ export function removeParticipant({ senderSocketId, targetUserId }) {
       room.pendingRequests.delete(reqId);
     }
   }
+
+  // Persist updated participant list in MongoDB
+  RoomRepository.saveRoom(room).catch(() => {});
 
   return { room, user: target };
 }
@@ -244,6 +280,13 @@ export function playRoom(socketId, time) {
     room.currentTime = time;
   }
   room.playState = "playing";
+
+  // Persist playback state to MongoDB asynchronously
+  RoomRepository.updatePlayback(room.id, {
+    playState: "playing",
+    currentTime: room.currentTime
+  }).catch(() => {});
+
   return {
     room,
     playbackState: {
@@ -267,6 +310,13 @@ export function pauseRoom(socketId, time) {
     room.currentTime = time;
   }
   room.playState = "paused";
+
+  // Persist playback state to MongoDB asynchronously
+  RoomRepository.updatePlayback(room.id, {
+    playState: "paused",
+    currentTime: room.currentTime
+  }).catch(() => {});
+
   return {
     room,
     playbackState: {
@@ -287,6 +337,12 @@ export function seekRoom(socketId, time) {
   }
   const room = perm.room;
   room.currentTime = time;
+
+  // Persist playback state to MongoDB asynchronously
+  RoomRepository.updatePlayback(room.id, {
+    currentTime: room.currentTime
+  }).catch(() => {});
+
   return {
     room,
     playbackState: {
@@ -310,6 +366,14 @@ export function changeRoomVideo(socketId, videoId) {
   room.videoId = trimmedId;
   room.currentTime = 0;
   room.playState = "paused";
+
+  // Persist playback state to MongoDB asynchronously
+  RoomRepository.updatePlayback(room.id, {
+    videoId: trimmedId,
+    currentTime: 0,
+    playState: "paused"
+  }).catch(() => {});
+
   return {
     room,
     playbackState: {
@@ -450,6 +514,13 @@ export function approveControlRequest({ approverSocketId, requestId }) {
     room.currentTime = 0;
     room.playState = "paused";
   }
+
+  // Persist updated state to MongoDB asynchronously
+  RoomRepository.updatePlayback(room.id, {
+    videoId: room.videoId,
+    playState: room.playState,
+    currentTime: room.currentTime
+  }).catch(() => {});
 
   return {
     room,
