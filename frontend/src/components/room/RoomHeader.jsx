@@ -7,32 +7,26 @@ export default function RoomHeader({
   onLeaveRoom
 }) {
   return (
-    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-      <div>
-        <span className="text-xs text-slate-500 uppercase tracking-wider block font-medium">
-          Room Code
-        </span>
-        <div className="flex items-center gap-2 mt-1">
+    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="text-[11px] text-slate-500 uppercase tracking-wider block font-semibold">
+            Room Code
+          </span>
           <span className="text-xl font-mono font-bold text-indigo-600">
             {roomId}
           </span>
-          <button
-            type="button"
-            onClick={onCopyCode}
-            className="px-2.5 py-0.5 bg-white hover:bg-slate-100 border border-slate-300 rounded text-xs text-slate-700 font-medium transition cursor-pointer"
-          >
-            {copied ? "Copied!" : "Copy"}
-          </button>
         </div>
+        <button
+          type="button"
+          onClick={onCopyCode}
+          className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 rounded text-xs text-slate-700 font-medium transition cursor-pointer shadow-xs"
+        >
+          {copied ? "Copied!" : "Copy Code"}
+        </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-        {username && (
-          <span className="text-xs text-slate-500">
-            Signed in as <span className="font-semibold text-slate-900">{username}</span>
-          </span>
-        )}
-
+      <div className="flex items-center justify-between pt-2.5 border-t border-slate-200">
         <span
           className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
             role === "Host"
@@ -53,6 +47,6 @@ export default function RoomHeader({
           Leave Room
         </button>
       </div>
-    </header>
+    </div>
   );
 }

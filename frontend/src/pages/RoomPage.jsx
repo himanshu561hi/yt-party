@@ -11,17 +11,9 @@ export default function RoomPage({ roomState }) {
   if (!currentRoom) return null;
 
   return (
-    <div className="space-y-6">
-      <RoomHeader
-        roomId={currentRoom.roomId}
-        role={currentRoom.role}
-        username={currentRoom.username}
-        copied={roomState.copied}
-        onCopyCode={roomState.handleCopyCode}
-        onLeaveRoom={roomState.handleLeaveRoom}
-      />
-
-      <div className="space-y-4">
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* Video & Playback Controls Column */}
+      <div className="lg:col-span-8 space-y-4">
         <YouTubePlayer
           videoId={currentRoom.videoId}
           playState={currentRoom.playState}
@@ -62,21 +54,33 @@ export default function RoomPage({ roomState }) {
         )}
       </div>
 
-      {isController && pendingRequests.length > 0 && (
-        <PendingRequests
-          pendingRequests={pendingRequests}
-          onApprove={roomState.handleApproveRequest}
-          onReject={roomState.handleRejectRequest}
+      {/* Room Details & Participants Column */}
+      <div className="lg:col-span-4 space-y-4">
+        <RoomHeader
+          roomId={currentRoom.roomId}
+          role={currentRoom.role}
+          username={currentRoom.username}
+          copied={roomState.copied}
+          onCopyCode={roomState.handleCopyCode}
+          onLeaveRoom={roomState.handleLeaveRoom}
         />
-      )}
 
-      <ParticipantList
-        participants={currentRoom.participants}
-        currentUserId={currentRoom.userId}
-        isHost={isHost}
-        onAssignRole={roomState.handleAssignRole}
-        onRemoveParticipant={roomState.handleRemoveParticipant}
-      />
+        {isController && pendingRequests.length > 0 && (
+          <PendingRequests
+            pendingRequests={pendingRequests}
+            onApprove={roomState.handleApproveRequest}
+            onReject={roomState.handleRejectRequest}
+          />
+        )}
+
+        <ParticipantList
+          participants={currentRoom.participants}
+          currentUserId={currentRoom.userId}
+          isHost={isHost}
+          onAssignRole={roomState.handleAssignRole}
+          onRemoveParticipant={roomState.handleRemoveParticipant}
+        />
+      </div>
     </div>
   );
 }
