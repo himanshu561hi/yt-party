@@ -56,8 +56,9 @@ export default async function handler(req, res) {
   await connectDB();
 
   if (req.headers?.upgrade && req.headers.upgrade.toLowerCase() === "websocket") {
-    if (req.socket) {
-      io.engine.handleUpgrade(req, req.socket, Buffer.alloc(0));
+    const rawSocket = req.socket || res.socket;
+    if (rawSocket) {
+      io.engine.handleUpgrade(req, rawSocket, req.upgradeHead || Buffer.alloc(0));
       return;
     }
   }

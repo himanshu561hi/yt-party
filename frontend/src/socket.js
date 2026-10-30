@@ -8,6 +8,7 @@ const initialToken = authService.getToken();
 export const socket = io(SERVER_URL, {
   autoConnect: false,
   withCredentials: true,
+  transports: ["websocket"],
   auth: {
     token: null
   },
