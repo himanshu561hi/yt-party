@@ -121,23 +121,27 @@ export async function joinRoom({ roomId, username, userId, socketId }) {
   }
 
   const finalUserId = userId || `user_${crypto.randomUUID().slice(0, 8)}`;
-  const role = finalUserId === room.hostUserId ? "Host" : "Participant";
+  const isDuplicateUser = room.participants.some((p) => p.userId === finalUserId && p.socketId !== socketId);
+  const effectiveUserId = isDuplicateUser ? `${finalUserId}_${socketId.slice(0, 4)}` : finalUserId;
+  const hasHost = room.participants.some((p) => p.role === "Host" && p.socketId !== socketId);
+  const isHost = !hasHost && finalUserId === room.hostUserId && !isDuplicateUser;
+  const role = isHost ? "Host" : "Participant";
 
   const participant = {
-    userId: finalUserId,
-    username: username || "Participant",
+    userId: effectiveUserId,
+    username: isDuplicateUser ? `${username || "Participant"} (Tab 2)` : (username || "Participant"),
     role,
     socketId
   };
 
-  const existingIdx = room.participants.findIndex((p) => p.userId === finalUserId);
+  const existingIdx = room.participants.findIndex((p) => p.socketId === socketId);
   if (existingIdx !== -1) {
     room.participants[existingIdx] = participant;
   } else {
     room.participants.push(participant);
   }
 
-  socketToRoomMap.set(socketId, { roomId, userId: finalUserId });
+  socketToRoomMap.set(socketId, { roomId, userId: effectiveUserId });
   await syncRoomToDb(room);
 
   return { room, user: participant };
@@ -153,16 +157,16 @@ export function leaveRoom(socketId) {
   if (!room) return null;
 
   const leavingUser = room.participants.find(
-    (p) => p.userId === userId || p.socketId === socketId
+    (p) => p.socketId === socketId || p.userId === userId
   ) || { userId };
 
   room.participants = room.participants.filter(
-    (p) => p.socketId !== socketId && p.userId !== userId
+    (p) => p.socketId !== socketId
   );
 
   // Clean pending requests from leaving user
   for (const [reqId, req] of room.pendingRequests.entries()) {
-    if (req.requester.userId === userId || req.requester.socketId === socketId) {
+    if (req.requester.socketId === socketId || req.requester.userId === userId) {
       room.pendingRequests.delete(reqId);
     }
   }

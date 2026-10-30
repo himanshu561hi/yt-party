@@ -25,7 +25,7 @@ export default function ParticipantList({
 
           return (
             <li
-              key={p.userId || p.socketId}
+              key={p.socketId || p.userId}
               className="p-3 rounded-lg bg-white border border-slate-200/90 text-sm shadow-2xs space-y-2.5"
             >
               <div className="flex items-center justify-between">
