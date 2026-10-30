@@ -1,97 +1,79 @@
 const API_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5001";
 
-// Cache token in memory / sessionStorage for WebSocket handshake authorization
-let cachedToken = null;
-
+let token = null;
 try {
-  cachedToken = sessionStorage.getItem("jwt_token");
+  token = sessionStorage.getItem("jwt_token");
 } catch {
   // Ignore sessionStorage errors
 }
 
-export const authService = {
-  getToken() {
-    return cachedToken;
-  },
+async function apiRequest(endpoint, options = {}) {
+  const headers = {
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers
+  };
 
-  setToken(token) {
-    cachedToken = token;
+  const res = await fetch(`${API_URL}/api/auth/${endpoint}`, {
+    credentials: "include",
+    ...options,
+    headers,
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || "Request failed. Please try again.");
+  }
+  return data;
+}
+
+export const authService = {
+  getToken: () => token,
+
+  setToken(newToken) {
+    token = newToken;
     try {
-      if (token) {
-        sessionStorage.setItem("jwt_token", token);
+      if (newToken) {
+        sessionStorage.setItem("jwt_token", newToken);
       } else {
         sessionStorage.removeItem("jwt_token");
       }
     } catch {
-      // Ignore
+      // Ignore sessionStorage errors
     }
   },
 
-  async signup({ name, email, password, confirmPassword }) {
-    const res = await fetch(`${API_URL}/api/auth/signup`, {
+  async authenticate(endpoint, payload) {
+    const data = await apiRequest(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ name, email, password, confirmPassword })
+      body: payload
     });
-
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || "Signup failed. Please try again.");
-    }
-
-    if (data.token) {
-      this.setToken(data.token);
-    }
+    if (data.token) this.setToken(data.token);
     return data;
   },
 
-  async login({ email, password }) {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email, password })
-    });
+  signup(payload) {
+    return this.authenticate("signup", payload);
+  },
 
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || "Login failed. Please try again.");
-    }
-
-    if (data.token) {
-      this.setToken(data.token);
-    }
-    return data;
+  login(credentials) {
+    return this.authenticate("login", credentials);
   },
 
   async getCurrentUser() {
-    const headers = {};
-    if (cachedToken) {
-      headers["Authorization"] = `Bearer ${cachedToken}`;
-    }
-
-    const res = await fetch(`${API_URL}/api/auth/me`, {
-      method: "GET",
-      headers,
-      credentials: "include"
-    });
-
-    if (!res.ok) {
+    try {
+      const data = await apiRequest("me");
+      return data.user;
+    } catch {
       this.setToken(null);
       return null;
     }
-
-    const data = await res.json();
-    return data.user;
   },
 
   async logout() {
     try {
-      await fetch(`${API_URL}/api/auth/logout`, {
-        method: "POST",
-        credentials: "include"
-      });
+      await apiRequest("logout", { method: "POST" });
     } catch {
       // Ignore network errors on logout
     } finally {
