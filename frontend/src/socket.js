@@ -6,10 +6,10 @@ const SERVER_URL = (import.meta.env.VITE_SERVER_URL || "http://localhost:5001").
 const initialToken = authService.getToken();
 
 export const socket = io(SERVER_URL, {
-  autoConnect: !!initialToken,
+  autoConnect: false,
   withCredentials: true,
   auth: {
-    token: initialToken
+    token: null
   },
   reconnection: true,
   reconnectionAttempts: 5,
@@ -18,6 +18,7 @@ export const socket = io(SERVER_URL, {
 
 export function connectSocket(token) {
   const finalToken = token || authService.getToken();
+  if (!finalToken) return;
   socket.auth = { token: finalToken };
   if (!socket.connected) {
     socket.connect();
@@ -25,7 +26,5 @@ export function connectSocket(token) {
 }
 
 export function disconnectSocket() {
-  if (socket.connected) {
-    socket.disconnect();
-  }
+  socket.disconnect();
 }
