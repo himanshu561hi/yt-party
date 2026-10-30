@@ -157,7 +157,6 @@ Clients must provide a valid JWT token in `auth: { token }` or in an HttpOnly co
    - `MONGODB_URI`: Your MongoDB connection string.
    - `JWT_SECRET`: Your secret key.
    - `CLIENT_ORIGIN`: Your Vercel frontend URL (e.g., `https://your-app.vercel.app`).
-5. (Optional) Alternatively, use the included `render.yaml` Blueprint specification.
 
 ### Recommended Full Stack Setup
 

@@ -72,4 +72,3 @@ export default function PendingRequests({ pendingRequests, onApprove, onReject }
     </section>
   );
 }
-
