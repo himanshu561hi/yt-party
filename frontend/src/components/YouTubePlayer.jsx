@@ -14,6 +14,17 @@ export default function YouTubePlayer({
   const [isReady, setIsReady] = useState(false);
   const [playerError, setPlayerError] = useState(null);
   const currentVideoId = useRef(videoId);
+  const currentTimeRef = useRef(currentTime);
+  const playStateRef = useRef(playState);
+  const hasSyncedInitialTime = useRef(false);
+
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
+    playStateRef.current = playState;
+  }, [playState]);
 
   // Initialize YouTube IFrame Player
   useEffect(() => {
@@ -31,11 +42,13 @@ export default function YouTubePlayer({
       }
 
       try {
+        const startSec = Math.floor(currentTimeRef.current || 0);
+
         playerRef.current = new window.YT.Player(containerRef.current, {
           videoId: videoId || "dQw4w9WgXcQ",
           playerVars: {
-            autoplay: playState === "playing" ? 1 : 0,
-            start: Math.floor(currentTime || 0),
+            autoplay: playStateRef.current === "playing" ? 1 : 0,
+            start: startSec,
             controls: 0,
             disablekb: 1,
             rel: 0,
@@ -51,8 +64,28 @@ export default function YouTubePlayer({
               if (!isMounted) return;
               setIsReady(true);
               setPlayerError(null);
-              if (currentTime > 0) event.target.seekTo(currentTime, true);
-              if (playState === "playing") event.target.playVideo();
+
+              const target = currentTimeRef.current || 0;
+              if (target > 0) {
+                event.target.seekTo(target, true);
+              }
+              if (playStateRef.current === "playing") {
+                event.target.playVideo();
+              }
+            },
+            onStateChange: (event) => {
+              if (!isMounted) return;
+              // Ensure initial seek is applied as soon as video starts playing/buffering
+              if (event.data === window.YT.PlayerState.PLAYING) {
+                const target = currentTimeRef.current || 0;
+                if (!hasSyncedInitialTime.current && target > 1) {
+                  hasSyncedInitialTime.current = true;
+                  const current = event.target.getCurrentTime?.() || 0;
+                  if (Math.abs(current - target) > 1.5) {
+                    event.target.seekTo(target, true);
+                  }
+                }
+              }
             },
             onError: (event) => {
               if (!isMounted) return;
@@ -98,6 +131,7 @@ export default function YouTubePlayer({
     if (!isReady || !playerRef.current?.loadVideoById || !videoId) return;
     if (currentVideoId.current !== videoId) {
       currentVideoId.current = videoId;
+      hasSyncedInitialTime.current = false;
       setPlayerError(null);
       playerRef.current.loadVideoById({ videoId, startSeconds: currentTime || 0 });
     }
@@ -107,22 +141,27 @@ export default function YouTubePlayer({
   useEffect(() => {
     if (!isReady || !playerRef.current) return;
     try {
+      const state = playerRef.current.getPlayerState?.();
       if (playState === "playing") {
-        playerRef.current.playVideo?.();
-      } else {
-        playerRef.current.pauseVideo?.();
+        if (state !== window.YT.PlayerState.PLAYING && state !== window.YT.PlayerState.BUFFERING) {
+          playerRef.current.playVideo?.();
+        }
+      } else if (playState === "paused") {
+        if (state === window.YT.PlayerState.PLAYING || state === window.YT.PlayerState.BUFFERING) {
+          playerRef.current.pauseVideo?.();
+        }
       }
     } catch {
       // Ignore
     }
   }, [playState, isReady]);
 
-  // Sync Time Seek (drift > 1.5 seconds)
+  // Sync Time Seek (drift > 2 seconds)
   useEffect(() => {
     if (!isReady || !playerRef.current?.getCurrentTime || currentTime === undefined) return;
     try {
       const current = playerRef.current.getCurrentTime();
-      if (Math.abs(current - currentTime) > 1.5) {
+      if (Math.abs(current - currentTime) > 2) {
         playerRef.current.seekTo(currentTime, true);
       }
     } catch {
@@ -149,23 +188,34 @@ export default function YouTubePlayer({
   }, [isReady, onTimeUpdate]);
 
   return (
-    <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-slate-700 shadow-md">
+    <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-200 shadow-sm">
       <div id="youtube-player-element" ref={containerRef} className="w-full h-full pointer-events-none" />
 
       {/* Transparent overlay blocks unauthorized local player clicks */}
       <div
-        className={`absolute inset-0 z-10 bg-transparent select-none ${
-          isController ? "cursor-pointer" : "cursor-default"
-        }`}
-        title={isController ? "Click to toggle Play/Pause" : "Watching in sync with room"}
+        className="absolute inset-0 z-10 bg-transparent select-none cursor-pointer"
+        title={isController ? "Click to toggle Play/Pause" : "Click to sync playback"}
         onClick={() => {
-          if (isController) onTogglePlay?.();
+          if (isController) {
+            onTogglePlay?.();
+          } else {
+            // Participant clicks video - if browser blocked unmuted autoplay, resume and sync
+            const player = playerRef.current;
+            if (player) {
+              const state = player.getPlayerState?.();
+              if (playStateRef.current === "playing" && state !== 1) {
+                player.playVideo?.();
+                const target = currentTimeRef.current || 0;
+                if (target > 0) player.seekTo?.(target, true);
+              }
+            }
+          }
         }}
       />
 
       {/* Loading overlay */}
       {!isReady && !playerError && (
-        <div className="absolute inset-0 z-15 flex items-center justify-center bg-slate-900/80 text-slate-300 text-sm pointer-events-none">
+        <div className="absolute inset-0 z-15 flex items-center justify-center bg-slate-900/60 text-white text-sm pointer-events-none font-medium">
           Loading player...
         </div>
       )}
@@ -173,7 +223,7 @@ export default function YouTubePlayer({
       {/* Error banner */}
       {playerError && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/90 text-rose-300 p-4 text-center text-sm">
-          <p className="font-medium mb-1">Player Notice</p>
+          <p className="font-semibold mb-1">Player Notice</p>
           <p className="text-xs text-rose-400 max-w-sm">{playerError}</p>
         </div>
       )}

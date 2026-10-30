@@ -318,7 +318,7 @@ export function createControlRequest({ socketId, action, payload }) {
   room.pendingRequests.set(requestId, request);
 
   const approverSocketIds = room.participants
-    .filter((p) => p.role === "Host" || p.role === "Moderator")
+     .filter((p) => p.role === "Host" || p.role === "Moderator")
     .map((p) => p.socketId);
 
   return { room, request, approverSocketIds };
