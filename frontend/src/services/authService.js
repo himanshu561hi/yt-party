@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:5001";
+const API_URL = (import.meta.env.VITE_SERVER_URL || "http://localhost:5001").replace(/\/+$/, "");
 
 let token = null;
 try {
