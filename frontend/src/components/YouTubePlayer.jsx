@@ -6,6 +6,8 @@ export default function YouTubePlayer({
   currentTime,
   isController,
   onTogglePlay,
+  onPlay,
+  onPause,
   onTimeUpdate,
   onError
 }) {
@@ -75,8 +77,20 @@ export default function YouTubePlayer({
             },
             onStateChange: (event) => {
               if (!isMounted) return;
-              // Ensure initial seek is applied as soon as video starts playing/buffering
-              if (event.data === window.YT.PlayerState.PLAYING) {
+
+              // If Host/Controller, sync local YouTube state changes to the room
+              if (isController) {
+                if (event.data === window.YT.PlayerState.PLAYING) {
+                  const t = event.target.getCurrentTime?.() || 0;
+                  onPlay?.(t);
+                } else if (event.data === window.YT.PlayerState.PAUSED) {
+                  const t = event.target.getCurrentTime?.() || 0;
+                  onPause?.(t);
+                }
+              }
+
+              // If Participant, ensure initial seek snaps to room time on start
+              if (!isController && event.data === window.YT.PlayerState.PLAYING) {
                 const target = currentTimeRef.current || 0;
                 if (!hasSyncedInitialTime.current && target > 1) {
                   hasSyncedInitialTime.current = true;
@@ -128,12 +142,17 @@ export default function YouTubePlayer({
 
   // Sync Video ID changes
   useEffect(() => {
-    if (!isReady || !playerRef.current?.loadVideoById || !videoId) return;
+    if (!isReady || !playerRef.current?.cueVideoById || !videoId) return;
     if (currentVideoId.current !== videoId) {
       currentVideoId.current = videoId;
       hasSyncedInitialTime.current = false;
       setPlayerError(null);
-      playerRef.current.loadVideoById({ videoId, startSeconds: currentTime || 0 });
+      const startAt = currentTime || 0;
+      if (playStateRef.current === "playing") {
+        playerRef.current.loadVideoById({ videoId, startSeconds: startAt });
+      } else {
+        playerRef.current.cueVideoById({ videoId, startSeconds: startAt });
+      }
     }
   }, [videoId, isReady]);
 

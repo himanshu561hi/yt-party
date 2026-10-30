@@ -20,6 +20,8 @@ export default function RoomPage({ roomState }) {
           currentTime={currentRoom.currentTime}
           isController={isController}
           onTogglePlay={roomState.handleTogglePlay}
+          onPlay={roomState.handlePlay}
+          onPause={roomState.handlePause}
           onTimeUpdate={roomState.handlePlayerTimeUpdate}
           onError={roomState.setError}
         />

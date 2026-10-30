@@ -140,6 +140,16 @@ export function useRoomSocket() {
     socket.emit(action, { time: localTime });
   };
 
+  const handlePlay = (time) => {
+    if (!isController || !currentRoom || currentRoom.playState === "playing") return;
+    socket.emit("play", { time: typeof time === "number" ? time : localTime });
+  };
+
+  const handlePause = (time) => {
+    if (!isController || !currentRoom || currentRoom.playState === "paused") return;
+    socket.emit("pause", { time: typeof time === "number" ? time : localTime });
+  };
+
   const handleSeekChange = (e) => {
     if (!isController) return;
     isDraggingSeek.current = true;
@@ -233,6 +243,8 @@ export function useRoomSocket() {
     handleLeaveRoom,
     handleCopyCode,
     handleTogglePlay,
+    handlePlay,
+    handlePause,
     handleSeekChange,
     handleSeekCommit,
     handleChangeVideo,
