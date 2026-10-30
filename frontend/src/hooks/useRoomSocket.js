@@ -59,7 +59,12 @@ export function useRoomSocket() {
 
     const listeners = {
       connect: () => setIsConnected(true),
-      disconnect: () => setIsConnected(false),
+      disconnect: () => {
+        setIsConnected(false);
+        setCurrentRoom(null);
+        setPendingRequests([]);
+        setRequestStatus(null);
+      },
       room_created: onRoomEntry,
       room_joined: onRoomEntry,
       sync_state: onSyncState,

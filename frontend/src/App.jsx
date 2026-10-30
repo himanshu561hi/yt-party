@@ -11,6 +11,13 @@ function AppContent() {
   const [authView, setAuthView] = useState("login");
   const roomState = useRoomSocket();
 
+  const handleLogout = () => {
+    if (roomState.currentRoom) {
+      roomState.handleLeaveRoom();
+    }
+    logout();
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-slate-100 text-slate-500 flex items-center justify-center p-4 text-sm font-medium">
@@ -47,7 +54,7 @@ function AppContent() {
                 </span>
                 <button
                   type="button"
-                  onClick={logout}
+                  onClick={handleLogout}
                   className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-md text-xs font-medium transition cursor-pointer"
                 >
                   Log Out
@@ -74,16 +81,16 @@ function AppContent() {
             </div>
           )}
 
-          {roomState.currentRoom ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-sm">
-              <RoomPage roomState={roomState} />
-            </div>
-          ) : !user ? (
+          {!user ? (
             authView === "login" ? (
               <LoginPage onNavigateToSignup={() => setAuthView("signup")} />
             ) : (
               <SignupPage onNavigateToLogin={() => setAuthView("login")} />
             )
+          ) : roomState.currentRoom ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-sm">
+              <RoomPage roomState={roomState} />
+            </div>
           ) : (
             <div className="max-w-2xl mx-auto bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-sm">
               <HomePage
