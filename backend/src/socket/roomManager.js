@@ -1,10 +1,49 @@
 import crypto from "crypto";
-import { RoomRepository } from "../models/Room.js";
+import { Room } from "../models/Room.js";
 
 const rooms = new Map();
 const socketToRoomMap = new Map();
 
 const YOUTUBE_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
+
+// Lightweight helper to sync room state with MongoDB
+async function syncRoomToDb(room) {
+  try {
+    const host = room.participants?.find((p) => p.userId === room.hostUserId);
+    await Room.findOneAndUpdate(
+      { roomId: room.id },
+      {
+        $set: {
+          roomId: room.id,
+          hostUserId: room.hostUserId,
+          hostUsername: host?.username || "Host",
+          videoId: room.videoId,
+          playState: room.playState,
+          currentTime: room.currentTime,
+          participants: room.participants.map((p) => ({
+            userId: p.userId,
+            username: p.username,
+            role: p.role,
+            socketId: p.socketId
+          })),
+          isActive: room.participants.length > 0
+        }
+      },
+      { upsert: true, returnDocument: "after" }
+    );
+  } catch (err) {
+    // Non-blocking log
+  }
+}
+
+// Lightweight helper to update playback state in MongoDB
+async function syncPlaybackToDb(roomId, updates) {
+  try {
+    await Room.findOneAndUpdate({ roomId }, { $set: updates });
+  } catch (err) {
+    // Non-blocking
+  }
+}
 
 export function generateRoomId() {
   let roomId;
@@ -47,7 +86,7 @@ export async function createRoom({ username, userId, socketId }) {
   socketToRoomMap.set(socketId, { roomId, userId: finalUserId });
 
   // Persist new room to MongoDB
-  await RoomRepository.saveRoom(room);
+  await syncRoomToDb(room);
 
   return { room, user: creator };
 }
@@ -56,24 +95,28 @@ export async function joinRoom({ roomId, username, userId, socketId }) {
   let room = rooms.get(roomId);
   if (!room) {
     // If room is not in memory, check if it was previously created and stored in MongoDB
-    const dbRoom = await RoomRepository.findByRoomId(roomId);
-    if (dbRoom) {
-      room = {
-        id: dbRoom.roomId,
-        hostUserId: dbRoom.hostUserId,
-        participants: (dbRoom.participants || []).map((p) => ({
-          userId: p.userId,
-          username: p.username,
-          role: p.role,
-          socketId: p.socketId
-        })),
-        videoId: dbRoom.videoId || "dQw4w9WgXcQ",
-        playState: dbRoom.playState || "paused",
-        currentTime: dbRoom.currentTime || 0,
-        pendingRequests: new Map()
-      };
-      rooms.set(roomId, room);
-    } else {
+    try {
+      const dbRoom = await Room.findOne({ roomId });
+      if (dbRoom) {
+        room = {
+          id: dbRoom.roomId,
+          hostUserId: dbRoom.hostUserId,
+          participants: (dbRoom.participants || []).map((p) => ({
+            userId: p.userId,
+            username: p.username,
+            role: p.role,
+            socketId: p.socketId
+          })),
+          videoId: dbRoom.videoId || "dQw4w9WgXcQ",
+          playState: dbRoom.playState || "paused",
+          currentTime: dbRoom.currentTime || 0,
+          pendingRequests: new Map()
+        };
+        rooms.set(roomId, room);
+      } else {
+        return { error: "Room not found." };
+      }
+    } catch {
       return { error: "Room not found." };
     }
   }
@@ -98,7 +141,7 @@ export async function joinRoom({ roomId, username, userId, socketId }) {
   socketToRoomMap.set(socketId, { roomId, userId: finalUserId });
 
   // Update room in MongoDB
-  await RoomRepository.saveRoom(room);
+  await syncRoomToDb(room);
 
   return { room, user: participant };
 }
@@ -135,9 +178,12 @@ export function leaveRoom(socketId) {
   if (room.participants.length === 0) {
     rooms.delete(roomId);
     roomDeleted = true;
-    RoomRepository.markInactive(roomId).catch(() => {});
+    Room.findOneAndUpdate(
+      { roomId },
+      { $set: { isActive: false, participants: [] } }
+    ).catch(() => {});
   } else {
-    RoomRepository.saveRoom(room).catch(() => {});
+    syncRoomToDb(room);
   }
 
   return {
@@ -183,7 +229,7 @@ export function assignRole({ senderSocketId, targetUserId, newRole }) {
   target.role = newRole;
 
   // Persist role assignment in MongoDB
-  RoomRepository.saveRoom(room).catch(() => {});
+  syncRoomToDb(room);
 
   return { room, user: target };
 }
@@ -227,7 +273,7 @@ export function removeParticipant({ senderSocketId, targetUserId }) {
   }
 
   // Persist updated participant list in MongoDB
-  RoomRepository.saveRoom(room).catch(() => {});
+  syncRoomToDb(room);
 
   return { room, user: target };
 }
@@ -282,10 +328,10 @@ export function playRoom(socketId, time) {
   room.playState = "playing";
 
   // Persist playback state to MongoDB asynchronously
-  RoomRepository.updatePlayback(room.id, {
+  syncPlaybackToDb(room.id, {
     playState: "playing",
     currentTime: room.currentTime
-  }).catch(() => {});
+  });
 
   return {
     room,
@@ -312,10 +358,10 @@ export function pauseRoom(socketId, time) {
   room.playState = "paused";
 
   // Persist playback state to MongoDB asynchronously
-  RoomRepository.updatePlayback(room.id, {
+  syncPlaybackToDb(room.id, {
     playState: "paused",
     currentTime: room.currentTime
-  }).catch(() => {});
+  });
 
   return {
     room,
@@ -339,9 +385,9 @@ export function seekRoom(socketId, time) {
   room.currentTime = time;
 
   // Persist playback state to MongoDB asynchronously
-  RoomRepository.updatePlayback(room.id, {
+  syncPlaybackToDb(room.id, {
     currentTime: room.currentTime
-  }).catch(() => {});
+  });
 
   return {
     room,
@@ -368,11 +414,11 @@ export function changeRoomVideo(socketId, videoId) {
   room.playState = "paused";
 
   // Persist playback state to MongoDB asynchronously
-  RoomRepository.updatePlayback(room.id, {
+  syncPlaybackToDb(room.id, {
     videoId: trimmedId,
     currentTime: 0,
     playState: "paused"
-  }).catch(() => {});
+  });
 
   return {
     room,
@@ -516,11 +562,11 @@ export function approveControlRequest({ approverSocketId, requestId }) {
   }
 
   // Persist updated state to MongoDB asynchronously
-  RoomRepository.updatePlayback(room.id, {
+  syncPlaybackToDb(room.id, {
     videoId: room.videoId,
     playState: room.playState,
     currentTime: room.currentTime
-  }).catch(() => {});
+  });
 
   return {
     room,

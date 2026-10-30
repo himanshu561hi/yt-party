@@ -1,4 +1,4 @@
-import { UserRepository } from "../models/User.js";
+import { User } from "../models/User.js";
 import { hashPassword, comparePassword, signToken } from "../utils/crypto.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -37,13 +37,13 @@ export async function signup(req, res) {
       return res.status(400).json({ error: "Passwords do not match." });
     }
 
-    const existingUser = await UserRepository.findByEmail(trimmedEmail);
+    const existingUser = await User.findOne({ email: trimmedEmail });
     if (existingUser) {
       return res.status(409).json({ error: "An account with this email already exists." });
     }
 
     const hashedPassword = hashPassword(password);
-    const user = await UserRepository.create({
+    const user = await User.create({
       name: trimmedName,
       email: trimmedEmail,
       password: hashedPassword
@@ -80,7 +80,7 @@ export async function login(req, res) {
       return res.status(400).json({ error: "Email and password are required." });
     }
 
-    const user = await UserRepository.findByEmail(trimmedEmail);
+    const user = await User.findOne({ email: trimmedEmail });
     if (!user) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
@@ -114,7 +114,7 @@ export async function login(req, res) {
 
 export async function getCurrentUser(req, res) {
   try {
-    const user = await UserRepository.findById(req.user.userId);
+    const user = await User.findById(req.user.userId).select("-password");
     if (!user) {
       return res.status(404).json({ error: "User not found." });
     }
