@@ -4,7 +4,7 @@ let token = null;
 try {
   token = localStorage.getItem("jwt_token") || sessionStorage.getItem("jwt_token");
 } catch {
-  // Ignore storage errors
+
 }
 
 async function apiRequest(endpoint, options = {}) {
