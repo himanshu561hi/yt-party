@@ -48,4 +48,26 @@ if (!process.env.VERCEL) {
   });
 }
 
+// Vercel serverless request handler
+export default async function handler(req, res) {
+  if (req.method === "OPTIONS") {
+    return app(req, res);
+  }
+  await connectDB();
+
+  if (req.headers?.upgrade && req.headers.upgrade.toLowerCase() === "websocket") {
+    if (req.socket) {
+      io.engine.handleUpgrade(req, req.socket, Buffer.alloc(0));
+      return;
+    }
+  }
+
+  if (req.url && (req.url.startsWith("/socket.io") || req.url.includes("/socket.io"))) {
+    io.engine.handleRequest(req, res);
+    return;
+  }
+
+  return app(req, res);
+}
+
 export { server, io };
