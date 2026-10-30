@@ -122,6 +122,8 @@ export default function YouTubePlayer({
             rel: 0, // Do not show related videos
             modestbranding: 1,
             enablejsapi: 1,
+            origin: typeof window !== "undefined" ? window.location.origin : undefined,
+            playsinline: 1,
             iv_load_policy: 3, // Disable annotations
             fs: 0
           },
@@ -189,7 +191,12 @@ export default function YouTubePlayer({
         const tag = document.createElement("script");
         tag.id = "youtube-iframe-script";
         tag.src = "https://www.youtube.com/iframe_api";
-        document.body.appendChild(tag);
+        const firstScriptTag = document.getElementsByTagName("script")[0];
+        if (firstScriptTag && firstScriptTag.parentNode) {
+          firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        } else {
+          document.body.appendChild(tag);
+        }
       }
 
       const prevCallback = window.onYouTubeIframeAPIReady;
