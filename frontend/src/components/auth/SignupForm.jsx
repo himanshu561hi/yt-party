@@ -1,158 +1,122 @@
 import { useState } from "react";
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export default function SignupForm({ onSubmit, error, onNavigateToLogin }) {
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: ""
+  });
+  const [localError, setLocalError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-export default function SignupForm({ onSubmit, error, onClearError, onNavigateToLogin }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formError, setFormError] = useState("");
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setFormError("");
-    if (onClearError) onClearError();
+    setLocalError("");
 
-    const trimmedName = name.trim();
-    const trimmedEmail = email.trim();
-
-    if (!trimmedName || trimmedName.length < 2) {
-      setFormError("Please enter your name (at least 2 characters).");
-      return;
-    }
-    if (!trimmedEmail || !EMAIL_REGEX.test(trimmedEmail)) {
-      setFormError("Please enter a valid email address.");
-      return;
-    }
-    if (!password || password.length < 6) {
-      setFormError("Password must be at least 6 characters.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setFormError("Passwords do not match.");
+    if (formData.password !== formData.confirmPassword) {
+      setLocalError("Passwords do not match.");
       return;
     }
 
+    setLoading(true);
     try {
-      setIsSubmitting(true);
       await onSubmit({
-        name: trimmedName,
-        email: trimmedEmail,
-        password,
-        confirmPassword
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        confirmPassword: formData.confirmPassword
       });
-    } catch {
-      // Error handled by parent or hook
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const activeError = formError || error;
+  const activeError = localError || error;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {activeError && (
-        <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-md text-rose-300 text-xs flex justify-between items-center">
-          <span>{activeError}</span>
-          <button
-            type="button"
-            onClick={() => {
-              setFormError("");
-              if (onClearError) onClearError();
-            }}
-            className="text-rose-400 hover:text-rose-200 font-bold ml-2 cursor-pointer"
-          >
-            x
-          </button>
+        <div className="p-2.5 bg-rose-950/80 border border-rose-800 rounded text-rose-300 text-xs">
+          {activeError}
         </div>
       )}
 
       <div>
-        <label className="block text-xs font-medium text-slate-300 mb-1" htmlFor="signup-name">
-          Full Name
-        </label>
+        <label className="block text-xs font-medium text-slate-300 mb-1">Full Name</label>
         <input
-          id="signup-name"
+          name="name"
           type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Alice Smith"
-          disabled={isSubmitting}
-          autoComplete="name"
-          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+          required
+          value={formData.name}
+          onChange={handleChange}
+          placeholder="Your Name"
+          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-300 mb-1" htmlFor="signup-email">
-          Email Address
-        </label>
+        <label className="block text-xs font-medium text-slate-300 mb-1">Email</label>
         <input
-          id="signup-email"
+          name="email"
           type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          required
+          value={formData.email}
+          onChange={handleChange}
           placeholder="you@example.com"
-          disabled={isSubmitting}
-          autoComplete="email"
-          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-300 mb-1" htmlFor="signup-password">
-          Password (min 6 characters)
-        </label>
+        <label className="block text-xs font-medium text-slate-300 mb-1">Password</label>
         <input
-          id="signup-password"
+          name="password"
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Create a password"
-          disabled={isSubmitting}
-          autoComplete="new-password"
-          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+          required
+          minLength={6}
+          value={formData.password}
+          onChange={handleChange}
+          placeholder="At least 6 characters"
+          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-300 mb-1" htmlFor="signup-confirm-password">
-          Confirm Password
-        </label>
+        <label className="block text-xs font-medium text-slate-300 mb-1">Confirm Password</label>
         <input
-          id="signup-confirm-password"
+          name="confirmPassword"
           type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          placeholder="Repeat password"
-          disabled={isSubmitting}
-          autoComplete="new-password"
-          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+          required
+          value={formData.confirmPassword}
+          onChange={handleChange}
+          placeholder="Confirm password"
+          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
         />
       </div>
 
       <button
         type="submit"
-        disabled={isSubmitting}
-        className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-sm font-medium transition cursor-pointer disabled:opacity-50"
+        disabled={loading}
+        className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm font-medium transition cursor-pointer disabled:opacity-50"
       >
-        {isSubmitting ? "Creating account..." : "Sign Up"}
+        {loading ? "Creating account..." : "Sign Up"}
       </button>
 
-      <div className="text-center pt-2">
-        <span className="text-xs text-slate-400">Already have an account? </span>
+      <p className="text-center text-xs text-slate-400 pt-2">
+        Already have an account?{" "}
         <button
           type="button"
           onClick={onNavigateToLogin}
-          className="text-xs text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer underline"
+          className="text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
         >
           Log In
         </button>
-      </div>
+      </p>
     </form>
   );
 }
-

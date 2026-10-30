@@ -1,107 +1,71 @@
 import { useState } from "react";
 
-export default function LoginForm({ onSubmit, error, onClearError, onNavigateToSignup }) {
+export default function LoginForm({ onSubmit, error, onNavigateToSignup }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formError, setFormError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setFormError("");
-    if (onClearError) onClearError();
-
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setFormError("Please enter your email.");
-      return;
-    }
-    if (!password) {
-      setFormError("Please enter your password.");
-      return;
-    }
-
+    if (!email || !password) return;
+    setLoading(true);
     try {
-      setIsSubmitting(true);
-      await onSubmit(trimmedEmail, password);
-    } catch {
-      // Error handled by parent or hook
+      await onSubmit(email.trim(), password);
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
-  const activeError = formError || error;
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {activeError && (
-        <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-md text-rose-300 text-xs flex justify-between items-center">
-          <span>{activeError}</span>
-          <button
-            type="button"
-            onClick={() => {
-              setFormError("");
-              if (onClearError) onClearError();
-            }}
-            className="text-rose-400 hover:text-rose-200 font-bold ml-2 cursor-pointer"
-          >
-            x
-          </button>
+      {error && (
+        <div className="p-2.5 bg-rose-950/80 border border-rose-800 rounded text-rose-300 text-xs">
+          {error}
         </div>
       )}
 
       <div>
-        <label className="block text-xs font-medium text-slate-300 mb-1" htmlFor="login-email">
-          Email Address
-        </label>
+        <label className="block text-xs font-medium text-slate-300 mb-1">Email</label>
         <input
-          id="login-email"
           type="email"
+          required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
-          disabled={isSubmitting}
-          autoComplete="email"
-          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-300 mb-1" htmlFor="login-password">
-          Password
-        </label>
+        <label className="block text-xs font-medium text-slate-300 mb-1">Password</label>
         <input
-          id="login-password"
           type="password"
+          required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Enter your password"
-          disabled={isSubmitting}
-          autoComplete="current-password"
-          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
+          className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
         />
       </div>
 
       <button
         type="submit"
-        disabled={isSubmitting}
-        className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-sm font-medium transition cursor-pointer disabled:opacity-50"
+        disabled={loading}
+        className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm font-medium transition cursor-pointer disabled:opacity-50"
       >
-        {isSubmitting ? "Logging in..." : "Log In"}
+        {loading ? "Logging in..." : "Log In"}
       </button>
 
-      <div className="text-center pt-2">
-        <span className="text-xs text-slate-400">Do not have an account? </span>
+      <p className="text-center text-xs text-slate-400 pt-2">
+        Do not have an account?{" "}
         <button
           type="button"
           onClick={onNavigateToSignup}
-          className="text-xs text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer underline"
+          className="text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
         >
           Sign Up
         </button>
-      </div>
+      </p>
     </form>
   );
 }
-
