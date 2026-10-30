@@ -40,7 +40,6 @@ export const authService = {
         sessionStorage.removeItem("jwt_token");
       }
     } catch {
-      // Ignore sessionStorage errors
     }
   },
 
