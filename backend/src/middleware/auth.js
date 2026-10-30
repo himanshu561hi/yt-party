@@ -1,32 +1,20 @@
 import { verifyToken, parseCookies } from "../utils/crypto.js";
 
-/**
- * Extracts authentication token from request cookies or Authorization header.
- */
+// Extracts JWT token from cookies or Authorization header
 export function extractToken(req) {
-  // 1. Check HttpOnly cookie
-  if (req.cookies && req.cookies.jwt_token) {
-    return req.cookies.jwt_token;
+  if (req.cookies?.jwt_token) return req.cookies.jwt_token;
+  if (req.headers?.cookie) {
+    const cookies = parseCookies(req.headers.cookie);
+    if (cookies.jwt_token) return cookies.jwt_token;
   }
-  if (req.headers && req.headers.cookie) {
-    const parsed = parseCookies(req.headers.cookie);
-    if (parsed.jwt_token) {
-      return parsed.jwt_token;
-    }
-  }
-
-  // 2. Check Authorization header: Bearer <token>
   const authHeader = req.headers?.authorization;
-  if (authHeader && typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+  if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
     return authHeader.slice(7).trim();
   }
-
   return null;
 }
 
-/**
- * Express middleware to protect HTTP endpoints.
- */
+// Express auth middleware for protecting REST routes
 export function authMiddleware(req, res, next) {
   const token = extractToken(req);
   if (!token) {
@@ -34,51 +22,32 @@ export function authMiddleware(req, res, next) {
   }
 
   const payload = verifyToken(token);
-  if (!payload || !payload.userId) {
+  if (!payload?.userId) {
     return res.status(401).json({ error: "Unauthorized. Invalid or expired token." });
   }
 
-  req.user = {
-    userId: payload.userId,
-    name: payload.name,
-    email: payload.email
-  };
+  req.user = { userId: payload.userId, name: payload.name, email: payload.email };
   next();
 }
 
-/**
- * Socket.IO middleware to authenticate incoming WebSocket connections.
- */
+// Socket.IO middleware to authenticate WebSocket handshakes
 export function socketAuthMiddleware(socket, next) {
-  let token = socket.handshake.auth?.token;
+  const token =
+    socket.handshake.auth?.token ||
+    parseCookies(socket.handshake.headers?.cookie)?.jwt_token ||
+    (typeof socket.handshake.headers?.authorization === "string" &&
+      socket.handshake.headers.authorization.startsWith("Bearer ") &&
+      socket.handshake.headers.authorization.slice(7).trim());
 
-  if (!token && socket.handshake.headers?.cookie) {
-    const cookies = parseCookies(socket.handshake.headers.cookie);
-    token = cookies.jwt_token;
-  }
-
-  if (!token && socket.handshake.headers?.authorization) {
-    const authHeader = socket.handshake.headers.authorization;
-    if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
-      token = authHeader.slice(7).trim();
-    }
-  }
-
-  if (!token) {
-    return next(new Error("Authentication required"));
-  }
+  if (!token) return next(new Error("Authentication required"));
 
   const payload = verifyToken(token);
-  if (!payload || !payload.userId) {
-    return next(new Error("Invalid or expired authentication token"));
-  }
+  if (!payload?.userId) return next(new Error("Invalid or expired token"));
 
   socket.user = {
     userId: payload.userId,
-    username: payload.name || payload.username || "User",
+    username: payload.name || "User",
     email: payload.email
   };
-
   next();
 }
-
