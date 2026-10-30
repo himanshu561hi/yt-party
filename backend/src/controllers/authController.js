@@ -1,6 +1,17 @@
 import { User } from "../models/User.js";
 import { hashPassword, comparePassword, signToken } from "../utils/crypto.js";
 
+// Helper to get consistent cross-site cookie options
+function getCookieOptions() {
+  const isProd = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
+  return {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+    path: "/"
+  };
+}
+
 // Helper to generate token, set cookie, and return standard user JSON
 function sendAuthResponse(res, user, statusCode = 200) {
   const userId = user._id ? user._id.toString() : user.id;
@@ -11,11 +22,8 @@ function sendAuthResponse(res, user, statusCode = 200) {
   });
 
   res.cookie("jwt_token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    path: "/"
+    ...getCookieOptions(),
+    maxAge: 7 * 24 * 60 * 60 * 1000
   });
 
   return res.status(statusCode).json({
@@ -104,6 +112,12 @@ export async function getCurrentUser(req, res) {
 }
 
 export function logout(req, res) {
-  res.clearCookie("jwt_token", { path: "/" });
+  const cookieOpts = getCookieOptions();
+  res.clearCookie("jwt_token", cookieOpts);
+  res.cookie("jwt_token", "", {
+    ...cookieOpts,
+    expires: new Date(0),
+    maxAge: 0
+  });
   return res.status(200).json({ message: "Logged out successfully." });
 }

@@ -2,9 +2,9 @@ const API_URL = (import.meta.env.VITE_SERVER_URL || "http://localhost:5001").rep
 
 let token = null;
 try {
-  token = sessionStorage.getItem("jwt_token");
+  token = localStorage.getItem("jwt_token") || sessionStorage.getItem("jwt_token");
 } catch {
-  // Ignore sessionStorage errors
+  // Ignore storage errors
 }
 
 async function apiRequest(endpoint, options = {}) {
@@ -35,11 +35,14 @@ export const authService = {
     token = newToken;
     try {
       if (newToken) {
+        localStorage.setItem("jwt_token", newToken);
         sessionStorage.setItem("jwt_token", newToken);
       } else {
+        localStorage.removeItem("jwt_token");
         sessionStorage.removeItem("jwt_token");
       }
     } catch {
+      // Ignore storage errors
     }
   },
 
@@ -61,6 +64,9 @@ export const authService = {
   },
 
   async getCurrentUser() {
+    if (!token) {
+      return null;
+    }
     try {
       const data = await apiRequest("me");
       return data.user;
