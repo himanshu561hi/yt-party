@@ -7,7 +7,8 @@ import {
   updatePlayback,
   createControlRequest,
   approveControlRequest,
-  rejectControlRequest
+  rejectControlRequest,
+  getEffectiveCurrentTime
 } from "./roomManager.js";
 
 export function registerRoomHandlers(io, socket) {
@@ -62,6 +63,8 @@ export function registerRoomHandlers(io, socket) {
       const { room, user: joinedUser } = result;
       socket.join(room.id);
 
+      const effectiveTime = getEffectiveCurrentTime(room);
+
       socket.emit("room_joined", {
         roomId: room.id,
         user: joinedUser,
@@ -71,14 +74,14 @@ export function registerRoomHandlers(io, socket) {
           participants: room.participants,
           videoId: room.videoId,
           playState: room.playState,
-          currentTime: room.currentTime
+          currentTime: effectiveTime
         }
       });
 
       socket.emit("sync_state", {
         videoId: room.videoId,
         playState: room.playState,
-        currentTime: room.currentTime
+        currentTime: effectiveTime
       });
 
       socket.to(room.id).emit("user_joined", {

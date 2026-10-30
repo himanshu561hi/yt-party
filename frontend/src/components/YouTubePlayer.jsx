@@ -35,6 +35,7 @@ export default function YouTubePlayer({
           videoId: videoId || "dQw4w9WgXcQ",
           playerVars: {
             autoplay: playState === "playing" ? 1 : 0,
+            start: Math.floor(currentTime || 0),
             controls: 0,
             disablekb: 1,
             rel: 0,

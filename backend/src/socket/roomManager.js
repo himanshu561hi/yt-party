@@ -43,6 +43,15 @@ async function syncPlaybackToDb(roomId, updates) {
   }
 }
 
+export function getEffectiveCurrentTime(room) {
+  if (!room) return 0;
+  if (room.playState === "playing" && room.lastUpdatedAt) {
+    const elapsed = (Date.now() - room.lastUpdatedAt) / 1000;
+    return Math.max(0, (room.currentTime || 0) + elapsed);
+  }
+  return Math.max(0, room.currentTime || 0);
+}
+
 export function generateRoomId() {
   let roomId;
   do {
@@ -69,6 +78,7 @@ export async function createRoom({ username, userId, socketId }) {
     videoId: "dQw4w9WgXcQ",
     playState: "paused",
     currentTime: 0,
+    lastUpdatedAt: Date.now(),
     pendingRequests: new Map()
   };
 
@@ -98,6 +108,7 @@ export async function joinRoom({ roomId, username, userId, socketId }) {
           videoId: dbRoom.videoId || "dQw4w9WgXcQ",
           playState: dbRoom.playState || "paused",
           currentTime: dbRoom.currentTime || 0,
+          lastUpdatedAt: Date.now(),
           pendingRequests: new Map()
         };
         rooms.set(roomId, room);
@@ -239,11 +250,18 @@ export function updatePlayback(socketId, action, payload = {}) {
   if (action === "play") {
     if (typeof payload.time === "number" && payload.time >= 0) room.currentTime = payload.time;
     room.playState = "playing";
+    room.lastUpdatedAt = Date.now();
   } else if (action === "pause") {
-    if (typeof payload.time === "number" && payload.time >= 0) room.currentTime = payload.time;
+    if (typeof payload.time === "number" && payload.time >= 0) {
+      room.currentTime = payload.time;
+    } else if (room.playState === "playing" && room.lastUpdatedAt) {
+      room.currentTime = getEffectiveCurrentTime(room);
+    }
     room.playState = "paused";
+    room.lastUpdatedAt = Date.now();
   } else if (action === "seek") {
     if (typeof payload.time === "number" && payload.time >= 0) room.currentTime = payload.time;
+    room.lastUpdatedAt = Date.now();
   } else if (action === "change_video") {
     const videoId = payload.videoId?.trim();
     if (!videoId || videoId.length !== 11) {
@@ -252,6 +270,7 @@ export function updatePlayback(socketId, action, payload = {}) {
     room.videoId = videoId;
     room.currentTime = 0;
     room.playState = "paused";
+    room.lastUpdatedAt = Date.now();
   }
 
   const playbackState = {
@@ -326,15 +345,23 @@ export function approveControlRequest({ approverSocketId, requestId }) {
   if (request.action === "play") {
     if (typeof request.payload.time === "number") room.currentTime = request.payload.time;
     room.playState = "playing";
+    room.lastUpdatedAt = Date.now();
   } else if (request.action === "pause") {
-    if (typeof request.payload.time === "number") room.currentTime = request.payload.time;
+    if (typeof request.payload.time === "number") {
+      room.currentTime = request.payload.time;
+    } else if (room.playState === "playing" && room.lastUpdatedAt) {
+      room.currentTime = getEffectiveCurrentTime(room);
+    }
     room.playState = "paused";
+    room.lastUpdatedAt = Date.now();
   } else if (request.action === "seek") {
     if (typeof request.payload.time === "number") room.currentTime = request.payload.time;
+    room.lastUpdatedAt = Date.now();
   } else if (request.action === "change_video") {
     room.videoId = request.payload.videoId;
     room.currentTime = 0;
     room.playState = "paused";
+    room.lastUpdatedAt = Date.now();
   }
 
   const playbackState = {
