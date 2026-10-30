@@ -1,12 +1,5 @@
 import { useState } from "react";
-import { extractYouTubeId } from "../../utils/youtube.js";
-
-function formatTime(seconds) {
-  if (!seconds || isNaN(seconds) || seconds < 0) return "00:00";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-}
+import { extractYouTubeId, formatTime } from "../../utils/youtube.js";
 
 export default function PlaybackControls({
   playState,
@@ -27,11 +20,11 @@ export default function PlaybackControls({
 
     const extractedId = extractYouTubeId(videoInput);
     if (!extractedId) {
-      if (onError) onError("Please enter a valid YouTube URL or 11-character video ID.");
+      onError?.("Please enter a valid YouTube URL or 11-character video ID.");
       return;
     }
 
-    if (onError) onError(null);
+    onError?.(null);
     onChangeVideo(extractedId);
     setVideoInput("");
   };
@@ -67,7 +60,7 @@ export default function PlaybackControls({
         />
       </div>
 
-      {/* Host / Moderator Direct Control Actions */}
+      {/* Controller Controls (Host / Moderator) */}
       {isController && (
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
           <button
@@ -102,4 +95,3 @@ export default function PlaybackControls({
     </div>
   );
 }
-

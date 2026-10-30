@@ -1,12 +1,5 @@
 import { useState } from "react";
-import { extractYouTubeId } from "../../utils/youtube.js";
-
-function formatTime(seconds) {
-  if (!seconds || isNaN(seconds) || seconds < 0) return "00:00";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-}
+import { extractYouTubeId, formatTime } from "../../utils/youtube.js";
 
 export default function ControlRequestForm({
   playState,
@@ -20,18 +13,18 @@ export default function ControlRequestForm({
   onClearRequestStatus,
   onError
 }) {
-  const [participantVideoInput, setParticipantVideoInput] = useState("");
+  const [videoInput, setVideoInput] = useState("");
 
   const handleVideoRequestSubmit = (e) => {
     e.preventDefault();
-    const extractedId = extractYouTubeId(participantVideoInput);
+    const extractedId = extractYouTubeId(videoInput);
     if (!extractedId) {
-      if (onError) onError("Please enter a valid YouTube URL or 11-character video ID.");
+      onError?.("Please enter a valid YouTube URL or 11-character video ID.");
       return;
     }
-    if (onError) onError(null);
+    onError?.(null);
     onRequestChangeVideo(extractedId);
-    setParticipantVideoInput("");
+    setVideoInput("");
   };
 
   return (
@@ -41,11 +34,11 @@ export default function ControlRequestForm({
           Participant Control Requests
         </span>
         <span className="text-xs text-slate-500">
-          Actions take effect once approved by Host or Moderator.
+          Takes effect once approved by Host or Moderator.
         </span>
       </div>
 
-      {/* Request Status Feedback Banner */}
+      {/* Request Status Feedback */}
       {requestStatus && (
         <div
           className={`p-3 rounded-md border flex items-center justify-between text-xs ${
@@ -72,13 +65,11 @@ export default function ControlRequestForm({
         </div>
       )}
 
-      {/* Participant Actions Grid */}
+      {/* Control Request Options */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {/* 1. Request Play / Pause */}
+        {/* Play/Pause Request */}
         <div className="p-3 bg-slate-800/80 rounded border border-slate-700 flex flex-col justify-between gap-2">
-          <span className="text-xs text-slate-300 font-medium">
-            Playback State
-          </span>
+          <span className="text-xs text-slate-300 font-medium">Playback State</span>
           <button
             type="button"
             onClick={onRequestPlayPause}
@@ -88,13 +79,11 @@ export default function ControlRequestForm({
           </button>
         </div>
 
-        {/* 2. Request Seek */}
+        {/* Seek Request */}
         <div className="p-3 bg-slate-800/80 rounded border border-slate-700 space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-300">
-            <span className="font-medium">Seek Position</span>
-            <span className="font-mono text-indigo-300">
-              {formatTime(participantSeekTime)}
-            </span>
+            <span className="font-medium">Seek</span>
+            <span className="font-mono text-indigo-300">{formatTime(participantSeekTime)}</span>
           </div>
           <input
             type="range"
@@ -114,16 +103,14 @@ export default function ControlRequestForm({
           </button>
         </div>
 
-        {/* 3. Request Change Video */}
+        {/* Change Video Request */}
         <div className="p-3 bg-slate-800/80 rounded border border-slate-700 flex flex-col justify-between gap-2">
-          <span className="text-xs text-slate-300 font-medium">
-            Change Video
-          </span>
+          <span className="text-xs text-slate-300 font-medium">Change Video</span>
           <form onSubmit={handleVideoRequestSubmit} className="flex gap-1.5">
             <input
               type="text"
-              value={participantVideoInput}
-              onChange={(e) => setParticipantVideoInput(e.target.value)}
+              value={videoInput}
+              onChange={(e) => setVideoInput(e.target.value)}
               placeholder="URL or Video ID"
               className="w-full px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
             />
@@ -139,4 +126,3 @@ export default function ControlRequestForm({
     </div>
   );
 }
-

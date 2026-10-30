@@ -1,9 +1,4 @@
-function formatTime(seconds) {
-  if (!seconds || isNaN(seconds) || seconds < 0) return "00:00";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-}
+import { formatTime } from "../../utils/youtube.js";
 
 export default function PendingRequests({ pendingRequests, onApprove, onReject }) {
   if (!pendingRequests || pendingRequests.length === 0) return null;
