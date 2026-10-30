@@ -1,2 +1,2 @@
-export { default } from "../server.js";
+export { default } from "../index.js";
 
