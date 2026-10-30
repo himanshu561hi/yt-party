@@ -19,7 +19,8 @@ const io = new Server(server, {
         origin === clientOrigin ||
         allowedOriginsList.includes(origin) ||
         origin.startsWith("http://localhost:") ||
-        origin.endsWith(".vercel.app")
+        origin.endsWith(".vercel.app") ||
+        origin.endsWith(".netlify.app")
       ) {
         return callback(null, true);
       }

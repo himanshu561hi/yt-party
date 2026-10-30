@@ -15,7 +15,8 @@ function checkAllowedOrigin(origin) {
     origin === clientOrigin ||
     allowedOriginsList.includes(origin) ||
     origin.startsWith("http://localhost:") ||
-    origin.endsWith(".vercel.app")
+    origin.endsWith(".vercel.app") ||
+    origin.endsWith(".netlify.app")
   ) {
     return true;
   }
