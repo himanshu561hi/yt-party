@@ -7,67 +7,95 @@ import HomePage from "./pages/HomePage.jsx";
 import RoomPage from "./pages/RoomPage.jsx";
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
   const [authView, setAuthView] = useState("login");
   const roomState = useRoomSocket();
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-900 text-slate-400 flex items-center justify-center p-4 text-sm">
+      <main className="min-h-screen bg-slate-100 text-slate-500 flex items-center justify-center p-4 text-sm font-medium">
         Loading session...
       </main>
     );
   }
 
   const status = !user
-    ? { text: "Not Logged In", bg: "bg-slate-800 text-slate-400 border-slate-700", dot: "bg-slate-500" }
+    ? { text: "Not Logged In", bg: "bg-slate-100 text-slate-600 border-slate-300", dot: "bg-slate-400" }
     : roomState.isConnected
-    ? { text: "Connected", bg: "bg-emerald-950 text-emerald-400 border-emerald-800", dot: "bg-emerald-400 animate-pulse" }
-    : { text: "Disconnected", bg: "bg-rose-950 text-rose-400 border-rose-800", dot: "bg-rose-400" };
+    ? { text: "Connected", bg: "bg-emerald-50 text-emerald-700 border-emerald-300", dot: "bg-emerald-500 animate-pulse" }
+    : { text: "Disconnected", bg: "bg-rose-50 text-rose-700 border-rose-300", dot: "bg-rose-500" };
 
   return (
-    <main className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl bg-slate-800 border border-slate-700 rounded-lg p-6 shadow-xl">
-        <header className="flex items-center justify-between mb-6 pb-4 border-b border-slate-700">
-          <span className="text-sm font-semibold tracking-wide text-white">
+    <div className="min-h-screen bg-slate-100 text-slate-800 flex flex-col">
+      {/* Top Navbar */}
+      <nav className="w-full bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-20">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <span className="font-bold text-slate-900 tracking-tight text-base sm:text-lg">
             YouTube Watch Party
           </span>
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${status.bg}`}>
-            <span className={`w-2 h-2 rounded-full ${status.dot}`} />
-            {status.text}
-          </span>
-        </header>
 
-        {roomState.error && (
-          <div className="mb-6 p-3 bg-rose-950/80 border border-rose-800 rounded-md flex items-start justify-between text-rose-300 text-sm">
-            <span>{roomState.error}</span>
-            <button
-              type="button"
-              onClick={roomState.clearError}
-              className="text-rose-400 hover:text-rose-200 font-bold ml-2 cursor-pointer"
-            >
-              x
-            </button>
+          <div className="flex items-center gap-3">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${status.bg}`}>
+              <span className={`w-2 h-2 rounded-full ${status.dot}`} />
+              {status.text}
+            </span>
+
+            {user && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-600 hidden sm:inline font-medium">
+                  {user.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-md text-xs font-medium transition cursor-pointer"
+                >
+                  Log Out
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        </div>
+      </nav>
 
-        {roomState.currentRoom ? (
-          <RoomPage roomState={roomState} />
-        ) : !user ? (
-          authView === "login" ? (
-            <LoginPage onNavigateToSignup={() => setAuthView("signup")} />
+      {/* Main Content Area */}
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-4xl mx-auto">
+          {roomState.error && (
+            <div className="mb-6 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start justify-between text-rose-700 text-sm">
+              <span>{roomState.error}</span>
+              <button
+                type="button"
+                onClick={roomState.clearError}
+                className="text-rose-500 hover:text-rose-700 font-bold ml-2 cursor-pointer"
+              >
+                x
+              </button>
+            </div>
+          )}
+
+          {roomState.currentRoom ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-6 shadow-sm">
+              <RoomPage roomState={roomState} />
+            </div>
+          ) : !user ? (
+            authView === "login" ? (
+              <LoginPage onNavigateToSignup={() => setAuthView("signup")} />
+            ) : (
+              <SignupPage onNavigateToLogin={() => setAuthView("login")} />
+            )
           ) : (
-            <SignupPage onNavigateToLogin={() => setAuthView("login")} />
-          )
-        ) : (
-          <HomePage
-            onCreateRoom={roomState.handleCreateRoom}
-            onJoinRoom={roomState.handleJoinRoom}
-            isSubmitting={roomState.isSubmitting}
-          />
-        )}
-      </div>
-    </main>
+            <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-sm">
+              <HomePage
+                onCreateRoom={roomState.handleCreateRoom}
+                onJoinRoom={roomState.handleJoinRoom}
+                isSubmitting={roomState.isSubmitting}
+              />
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
   );
 }
 

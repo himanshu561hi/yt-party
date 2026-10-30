@@ -7,39 +7,39 @@ export default function RoomHeader({
   onLeaveRoom
 }) {
   return (
-    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-900 rounded-md border border-slate-700">
+    <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
       <div>
-        <span className="text-xs text-slate-400 uppercase tracking-wider block">
+        <span className="text-xs text-slate-500 uppercase tracking-wider block font-medium">
           Room Code
         </span>
         <div className="flex items-center gap-2 mt-1">
-          <span className="text-xl font-mono font-bold text-indigo-400">
+          <span className="text-xl font-mono font-bold text-indigo-600">
             {roomId}
           </span>
           <button
             type="button"
             onClick={onCopyCode}
-            className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs text-slate-300 transition cursor-pointer"
+            className="px-2.5 py-0.5 bg-white hover:bg-slate-100 border border-slate-300 rounded text-xs text-slate-700 font-medium transition cursor-pointer"
           >
             {copied ? "Copied!" : "Copy"}
           </button>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
         {username && (
-          <span className="text-xs text-slate-400">
-            Signed in as <span className="font-semibold text-white">{username}</span>
+          <span className="text-xs text-slate-500">
+            Signed in as <span className="font-semibold text-slate-900">{username}</span>
           </span>
         )}
 
         <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold ${
+          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
             role === "Host"
-              ? "bg-amber-950 text-amber-300 border border-amber-800"
+              ? "bg-amber-50 text-amber-800 border-amber-300"
               : role === "Moderator"
-              ? "bg-blue-950 text-blue-300 border border-blue-800"
-              : "bg-slate-800 text-slate-300 border border-slate-600"
+              ? "bg-blue-50 text-blue-800 border-blue-300"
+              : "bg-slate-100 text-slate-700 border-slate-300"
           }`}
         >
           {role}
@@ -48,7 +48,7 @@ export default function RoomHeader({
         <button
           type="button"
           onClick={onLeaveRoom}
-          className="px-3 py-1.5 bg-rose-900 hover:bg-rose-800 text-rose-200 rounded text-xs font-medium transition cursor-pointer"
+          className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded text-xs font-semibold transition cursor-pointer"
         >
           Leave Room
         </button>
@@ -56,4 +56,3 @@ export default function RoomHeader({
     </header>
   );
 }
-

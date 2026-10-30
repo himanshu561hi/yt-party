@@ -10,24 +10,22 @@ export default function LoginPage({ onNavigateToSignup, onLoginSuccess }) {
   };
 
   return (
-    <div className="max-w-md w-full mx-auto">
+    <div className="max-w-md w-full mx-auto bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-sm">
       <header className="mb-6 text-center">
-        <h1 className="text-2xl font-bold tracking-tight text-white mb-2">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 mb-1.5">
           Welcome Back
         </h1>
-        <p className="text-sm text-slate-400">
-          Sign in to join or host a synchronized YouTube Watch Party session.
+        <p className="text-sm text-slate-500">
+          Sign in to join or host a synchronized YouTube session.
         </p>
       </header>
 
-      <div className="bg-slate-900/60 border border-slate-700/60 rounded-lg p-6 shadow-xl">
-        <LoginForm
-          onSubmit={handleLogin}
-          error={error}
-          onClearError={clearError}
-          onNavigateToSignup={onNavigateToSignup}
-        />
-      </div>
+      <LoginForm
+        onSubmit={handleLogin}
+        error={error}
+        onClearError={clearError}
+        onNavigateToSignup={onNavigateToSignup}
+      />
     </div>
   );
 }

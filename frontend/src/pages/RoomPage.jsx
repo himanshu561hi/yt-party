@@ -45,7 +45,7 @@ export default function RoomPage({ roomState }) {
         />
 
         {!isController && (
-          <div className="p-4 bg-slate-900 rounded-md border border-slate-700">
+          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
             <ControlRequestForm
               playState={currentRoom.playState}
               duration={roomState.duration}

@@ -6,8 +6,8 @@ export default function ParticipantList({
   onRemoveParticipant
 }) {
   return (
-    <section className="bg-slate-900 rounded-md border border-slate-700 p-4">
-      <h2 className="text-xs uppercase font-semibold tracking-wider text-slate-400 mb-3">
+    <section className="bg-slate-50 rounded-lg border border-slate-200 p-4">
+      <h2 className="text-xs uppercase font-bold tracking-wider text-slate-700 mb-3">
         Participants ({participants?.length || 0})
       </h2>
 
@@ -20,36 +20,35 @@ export default function ParticipantList({
           return (
             <li
               key={p.userId || p.socketId}
-              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded bg-slate-800/80 border border-slate-700/50 text-sm"
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-white border border-slate-200 text-sm shadow-xs"
             >
               <div className="flex items-center gap-2">
-                <span className="text-white font-medium">{p.username}</span>
+                <span className="text-slate-900 font-semibold">{p.username}</span>
                 {isMe && (
-                  <span className="text-xs text-indigo-400 font-semibold">
+                  <span className="text-xs text-indigo-600 font-bold">
                     (You)
                   </span>
                 )}
                 <span
-                  className={`ml-2 px-2 py-0.5 rounded text-xs font-medium ${
+                  className={`ml-1.5 px-2 py-0.5 rounded-full text-xs font-semibold border ${
                     p.role === "Host"
-                      ? "bg-amber-950/80 text-amber-300 border border-amber-800/80"
+                      ? "bg-amber-50 text-amber-800 border-amber-300"
                       : p.role === "Moderator"
-                      ? "bg-blue-950/80 text-blue-300 border border-blue-800/80"
-                      : "bg-slate-700 text-slate-300"
+                      ? "bg-blue-50 text-blue-800 border-blue-300"
+                      : "bg-slate-100 text-slate-700 border-slate-300"
                   }`}
                 >
                   {p.role}
                 </span>
               </div>
 
-              {/* Host Actions: Role Assignment and Removal */}
               {canManageThisUser && (
                 <div className="flex items-center gap-2 self-end sm:self-auto">
                   {p.role === "Participant" ? (
                     <button
                       type="button"
                       onClick={() => onAssignRole(p.userId, "Moderator")}
-                      className="px-2 py-1 bg-blue-950 hover:bg-blue-900 text-blue-200 border border-blue-800 rounded text-xs font-medium transition cursor-pointer"
+                      className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs font-semibold transition cursor-pointer"
                     >
                       Make Moderator
                     </button>
@@ -57,7 +56,7 @@ export default function ParticipantList({
                     <button
                       type="button"
                       onClick={() => onAssignRole(p.userId, "Participant")}
-                      className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 rounded text-xs font-medium transition cursor-pointer"
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded text-xs font-semibold transition cursor-pointer"
                     >
                       Make Participant
                     </button>
@@ -66,7 +65,7 @@ export default function ParticipantList({
                   <button
                     type="button"
                     onClick={() => onRemoveParticipant(p.userId)}
-                    className="px-2 py-1 bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-800 rounded text-xs font-medium transition cursor-pointer"
+                    className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded text-xs font-semibold transition cursor-pointer"
                   >
                     Remove
                   </button>
@@ -79,4 +78,3 @@ export default function ParticipantList({
     </section>
   );
 }
-
