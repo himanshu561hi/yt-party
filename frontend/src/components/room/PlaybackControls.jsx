@@ -10,7 +10,8 @@ export default function PlaybackControls({
   onSeekChange,
   onSeekCommit,
   onChangeVideo,
-  onError
+  onError,
+  onToggleFullscreen
 }) {
   const [videoInput, setVideoInput] = useState("");
 
@@ -33,9 +34,24 @@ export default function PlaybackControls({
     <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4 shadow-2xs">
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs font-semibold">
-          <span className="font-mono text-slate-800 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
-            {formatTime(localTime)} / {formatTime(duration)}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-slate-800 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-2xs">
+              {formatTime(localTime)} / {formatTime(duration)}
+            </span>
+            {onToggleFullscreen && (
+              <button
+                type="button"
+                onClick={onToggleFullscreen}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-medium cursor-pointer shadow-2xs transition"
+                title="Toggle Fullscreen"
+              >
+                <svg className="w-3.5 h-3.5 fill-current text-slate-600" viewBox="0 0 24 24">
+                  <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+                </svg>
+                <span className="hidden sm:inline">Fullscreen</span>
+              </button>
+            )}
+          </div>
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
             playState === "playing"
               ? "bg-emerald-50 text-emerald-700 border-emerald-300"

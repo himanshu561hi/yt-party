@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import RoomHeader from "../components/room/RoomHeader.jsx";
 import YouTubePlayer from "../components/YouTubePlayer.jsx";
 import PlaybackControls from "../components/room/PlaybackControls.jsx";
@@ -7,6 +8,26 @@ import ParticipantList from "../components/room/ParticipantList.jsx";
 
 export default function RoomPage({ roomState }) {
   const { currentRoom, isHost, isController, pendingRequests } = roomState;
+  const playerWrapperRef = useRef(null);
+
+  const handleToggleFullscreen = () => {
+    const el = playerWrapperRef.current;
+    if (!el) return;
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fsEl) {
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {});
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+  };
 
   if (!currentRoom) return null;
 
@@ -15,6 +36,7 @@ export default function RoomPage({ roomState }) {
       {/* Video & Playback Controls Column */}
       <div className="lg:col-span-8 space-y-4">
         <YouTubePlayer
+          wrapperRef={playerWrapperRef}
           videoId={currentRoom.videoId}
           playState={currentRoom.playState}
           currentTime={currentRoom.currentTime}
@@ -36,6 +58,7 @@ export default function RoomPage({ roomState }) {
           onSeekCommit={roomState.handleSeekCommit}
           onChangeVideo={roomState.handleChangeVideo}
           onError={roomState.setError}
+          onToggleFullscreen={handleToggleFullscreen}
         />
 
         {!isController && (

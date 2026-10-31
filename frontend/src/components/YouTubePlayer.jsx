@@ -9,10 +9,14 @@ export default function YouTubePlayer({
   onPlay,
   onPause,
   onTimeUpdate,
-  onError
+  onError,
+  wrapperRef: externalWrapperRef
 }) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
+  const internalWrapperRef = useRef(null);
+  const wrapperRef = externalWrapperRef || internalWrapperRef;
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [playerError, setPlayerError] = useState(null);
   const currentVideoId = useRef(videoId);
@@ -27,6 +31,37 @@ export default function YouTubePlayer({
   useEffect(() => {
     playStateRef.current = playState;
   }, [playState]);
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    document.addEventListener("webkitfullscreenchange", handleFsChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFsChange);
+      document.removeEventListener("webkitfullscreenchange", handleFsChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (!fsEl) {
+      if (el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {});
+      } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    }
+  };
 
   // Initialize YouTube IFrame Player
   useEffect(() => {
@@ -221,7 +256,12 @@ export default function YouTubePlayer({
   }, [isReady, onTimeUpdate]);
 
   return (
-    <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+    <div
+      ref={wrapperRef}
+      className={`relative w-full aspect-video bg-black overflow-hidden shadow-sm ${
+        isFullscreen ? "rounded-none border-none" : "rounded-xl border border-slate-200"
+      }`}
+    >
       <div id="youtube-player-element" ref={containerRef} className="w-full h-full pointer-events-none" />
 
       {/* Transparent overlay blocks unauthorized local player clicks */}
@@ -260,6 +300,33 @@ export default function YouTubePlayer({
           <p className="text-xs text-rose-400 max-w-sm">{playerError}</p>
         </div>
       )}
+
+      {/* Fullscreen toggle button */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleFullscreen();
+        }}
+        className="absolute bottom-3 right-3 z-20 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-semibold backdrop-blur-xs transition cursor-pointer shadow-md"
+        title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+      >
+        {isFullscreen ? (
+          <>
+            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+              <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
+            </svg>
+            <span className="hidden sm:inline">Exit</span>
+          </>
+        ) : (
+          <>
+            <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+              <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+            </svg>
+            <span className="hidden sm:inline">Fullscreen</span>
+          </>
+        )}
+      </button>
     </div>
   );
 }
