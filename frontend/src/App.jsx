@@ -21,6 +21,9 @@ function AppContent() {
   }, []);
 
   const handleLogout = () => {
+    try {
+      sessionStorage.removeItem("active_watch_room");
+    } catch {}
     if (roomState.currentRoom) {
       roomState.handleLeaveRoom();
     }

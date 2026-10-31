@@ -54,6 +54,10 @@ export function getEffectiveCurrentTime(room) {
   return Math.max(0, room.currentTime || 0);
 }
 
+export function getSocketSession(socketId) {
+  return socketToRoomMap.get(socketId) || null;
+}
+
 export function generateRoomId() {
   let roomId;
   do {
@@ -77,7 +81,7 @@ export async function createRoom({ username, userId, socketId }) {
     id: roomId,
     hostUserId: finalUserId,
     participants: [creator],
-    videoId: "dQw4w9WgXcQ",
+    videoId: "xvT1jH8B9AM",
     playState: "paused",
     currentTime: 0,
     lastUpdatedAt: Date.now(),
@@ -91,7 +95,7 @@ export async function createRoom({ username, userId, socketId }) {
   return { room, user: creator };
 }
 
-export async function joinRoom({ roomId, username, userId, socketId }) {
+export async function joinRoom({ roomId, username, userId, socketId, isSocketConnected }) {
   let room = rooms.get(roomId);
 
   if (!room) {
@@ -110,7 +114,7 @@ export async function joinRoom({ roomId, username, userId, socketId }) {
             role: p.role,
             socketId: p.socketId
           })),
-          videoId: dbRoom.videoId || "dQw4w9WgXcQ",
+          videoId: dbRoom.videoId || "xvT1jH8B9AM",
           playState: dbRoom.playState || "paused",
           currentTime: dbRoom.currentTime || 0,
           lastUpdatedAt: Date.now(),
@@ -126,15 +130,32 @@ export async function joinRoom({ roomId, username, userId, socketId }) {
   }
 
   const finalUserId = userId || `user_${crypto.randomUUID().slice(0, 8)}`;
-  const isDuplicateUser = room.participants.some((p) => p.userId === finalUserId && p.socketId !== socketId);
+
+  // Check if this user is already registered in the room
+  const existingParticipant = room.participants.find((p) => p.userId === finalUserId);
+  const isOldSocketAlive = Boolean(existingParticipant?.socketId && isSocketConnected?.(existingParticipant.socketId));
+
+  if (existingParticipant && !isOldSocketAlive) {
+    // Reconnection of an existing participant: update socket in-place, preserve role
+    if (existingParticipant.socketId) {
+      socketToRoomMap.delete(existingParticipant.socketId);
+    }
+    existingParticipant.socketId = socketId;
+    if (username) existingParticipant.username = username;
+    socketToRoomMap.set(socketId, { roomId, userId: existingParticipant.userId });
+    await syncRoomToDb(room);
+    return { room, user: existingParticipant };
+  }
+
+  // If old socket is alive, this is a second simultaneous tab for the user
+  const isDuplicateUser = Boolean(existingParticipant && isOldSocketAlive);
   const effectiveUserId = isDuplicateUser ? `${finalUserId}_${socketId.slice(0, 4)}` : finalUserId;
-  const hasHost = room.participants.some((p) => p.role === "Host" && p.socketId !== socketId);
-  const isHost = !hasHost && finalUserId === room.hostUserId && !isDuplicateUser;
+  const isHost = finalUserId === room.hostUserId && !isDuplicateUser;
   const role = isHost ? "Host" : "Participant";
 
   const participant = {
     userId: effectiveUserId,
-    username: isDuplicateUser ? `${username || "Participant"} (Tab 2)` : (username || "Participant"),
+    username: isDuplicateUser ? `${username || "Participant"} (Tab 2)` : (username || (isHost ? "Host" : "Participant")),
     role,
     socketId
   };

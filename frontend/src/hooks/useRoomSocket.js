@@ -30,13 +30,28 @@ export function useRoomSocket() {
       setError(null);
       setPendingRequests([]);
       setRequestStatus(null);
+      try {
+        sessionStorage.setItem("active_watch_room", data.roomId);
+      } catch {}
+
+      const rawParticipants = data.room?.participants || [data.user];
+      const seen = new Set();
+      const uniqueParticipants = [];
+      for (const p of rawParticipants) {
+        const id = p.userId || p.socketId;
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          uniqueParticipants.push(p);
+        }
+      }
+
       setCurrentRoom({
         roomId: data.roomId,
         role: data.user.role,
         userId: data.user.userId,
         username: data.user.username,
-        participants: data.room?.participants || [data.user],
-        videoId: data.room?.videoId || "dQw4w9WgXcQ",
+        participants: uniqueParticipants,
+        videoId: data.room?.videoId || "xvT1jH8B9AM",
         playState: data.room?.playState || "paused",
         currentTime: data.room?.currentTime || 0
       });
@@ -51,19 +66,43 @@ export function useRoomSocket() {
     }
 
     function updateParticipants(updater, leavingUserId = null) {
-      setCurrentRoom((prev) => (prev ? { ...prev, participants: updater(prev.participants) } : null));
+      setCurrentRoom((prev) => {
+        if (!prev) return null;
+        const newParticipants = updater(prev.participants);
+        const seen = new Set();
+        const unique = [];
+        for (const p of newParticipants) {
+          const id = p.userId || p.socketId;
+          if (id && !seen.has(id)) {
+            seen.add(id);
+            unique.push(p);
+          }
+        }
+        return { ...prev, participants: unique };
+      });
       if (leavingUserId) {
         setPendingRequests((prev) => prev.filter((r) => r.requester?.userId !== leavingUserId));
       }
     }
 
     const listeners = {
-      connect: () => setIsConnected(true),
+      connect: () => {
+        setIsConnected(true);
+        const activeRoom = currentRoomRef.current;
+        let savedRoomId = null;
+        try {
+          savedRoomId = sessionStorage.getItem("active_watch_room");
+        } catch {}
+        const targetRoomId = activeRoom?.roomId || savedRoomId;
+        if (targetRoomId) {
+          socket.emit("join_room", {
+            roomId: targetRoomId,
+            username: activeRoom?.username
+          });
+        }
+      },
       disconnect: () => {
         setIsConnected(false);
-        setCurrentRoom(null);
-        setPendingRequests([]);
-        setRequestStatus(null);
       },
       room_created: onRoomEntry,
       room_joined: onRoomEntry,
@@ -75,6 +114,9 @@ export function useRoomSocket() {
       user_joined: (data) => updateParticipants(() => data.participants || []),
       user_left: (data) => updateParticipants(() => data.participants || [], data.user?.userId),
       room_ended: (data) => {
+        try {
+          sessionStorage.removeItem("active_watch_room");
+        } catch {}
         setCurrentRoom(null);
         setPendingRequests([]);
         setRequestStatus(null);
@@ -82,6 +124,9 @@ export function useRoomSocket() {
       },
       participant_removed: (data) => {
         if (data.removed) {
+          try {
+            sessionStorage.removeItem("active_watch_room");
+          } catch {}
           setCurrentRoom(null);
           setPendingRequests([]);
           setRequestStatus(null);
@@ -110,6 +155,12 @@ export function useRoomSocket() {
       action_error: (err) => {
         setIsSubmitting(false);
         setError(err?.message || "An error occurred.");
+        if (err?.action === "join_room" && currentRoomRef.current) {
+          try {
+            sessionStorage.removeItem("active_watch_room");
+          } catch {}
+          setCurrentRoom(null);
+        }
       }
     };
 
@@ -134,6 +185,9 @@ export function useRoomSocket() {
   };
 
   const handleLeaveRoom = () => {
+    try {
+      sessionStorage.removeItem("active_watch_room");
+    } catch {}
     socket.emit("leave_room");
     setCurrentRoom(null);
     setPendingRequests([]);

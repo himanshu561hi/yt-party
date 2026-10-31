@@ -82,7 +82,7 @@ export default function YouTubePlayer({
         const startSec = Math.floor(currentTimeRef.current || 0);
 
         playerRef.current = new window.YT.Player(containerRef.current, {
-          videoId: videoId || "dQw4w9WgXcQ",
+          videoId: videoId || "xvT1jH8B9AM",
           playerVars: {
             autoplay: playStateRef.current === "playing" ? 1 : 0,
             start: startSec,

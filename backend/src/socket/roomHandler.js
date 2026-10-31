@@ -9,8 +9,11 @@ import {
   createControlRequest,
   approveControlRequest,
   rejectControlRequest,
-  getEffectiveCurrentTime
+  getEffectiveCurrentTime,
+  getSocketSession
 } from "./roomManager.js";
+
+const disconnectTimers = new Map();
 
 export function registerRoomHandlers(io, socket) {
   const user = socket.user || {};
@@ -50,11 +53,19 @@ export function registerRoomHandlers(io, socket) {
         return socket.emit("action_error", { action: "join_room", message: "Room ID is required." });
       }
 
+      const effectiveUserId = user.userId || payload?.userId;
+      const timerKey = `${roomId}:${effectiveUserId}`;
+      if (disconnectTimers.has(timerKey)) {
+        clearTimeout(disconnectTimers.get(timerKey));
+        disconnectTimers.delete(timerKey);
+      }
+
       const result = await joinRoom({
         roomId,
         username: user.username || payload?.username,
-        userId: user.userId,
-        socketId: socket.id
+        userId: effectiveUserId,
+        socketId: socket.id,
+        isSocketConnected: (id) => Boolean(io.sockets.sockets.get(id)?.connected)
       });
 
       if (result.error) {
@@ -225,10 +236,11 @@ export function registerRoomHandlers(io, socket) {
   });
 
   // Leave room & disconnect handling
-  const handleLeave = () => {
-    const result = leaveRoom(socket.id);
+  const executeLeave = (targetSocketId = socket.id) => {
+    const result = leaveRoom(targetSocketId);
     if (!result) return;
-    socket.leave(result.roomId);
+    const targetSocket = io.sockets.sockets.get(targetSocketId);
+    if (targetSocket) targetSocket.leave(result.roomId);
 
     if (result.roomEndedByHost) {
       io.to(result.roomId).emit("room_ended", {
@@ -244,6 +256,33 @@ export function registerRoomHandlers(io, socket) {
     }
   };
 
-  socket.on("leave_room", handleLeave);
-  socket.on("disconnect", handleLeave);
+  socket.on("leave_room", () => {
+    const session = getSocketSession(socket.id);
+    if (session) {
+      const timerKey = `${session.roomId}:${session.userId}`;
+      if (disconnectTimers.has(timerKey)) {
+        clearTimeout(disconnectTimers.get(timerKey));
+        disconnectTimers.delete(timerKey);
+      }
+    }
+    executeLeave(socket.id);
+  });
+
+  socket.on("disconnect", () => {
+    const session = getSocketSession(socket.id);
+    if (!session) return;
+
+    const timerKey = `${session.roomId}:${session.userId}`;
+    if (disconnectTimers.has(timerKey)) {
+      clearTimeout(disconnectTimers.get(timerKey));
+    }
+
+    const currentSocketId = socket.id;
+    const timer = setTimeout(() => {
+      disconnectTimers.delete(timerKey);
+      executeLeave(currentSocketId);
+    }, 4000);
+
+    disconnectTimers.set(timerKey, timer);
+  });
 }

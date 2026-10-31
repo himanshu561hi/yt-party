@@ -18,7 +18,7 @@ const roomSchema = new mongoose.Schema(
     },
     videoId: {
       type: String,
-      default: "dQw4w9WgXcQ"
+      default: "xvT1jH8B9AM"
     },
     playState: {
       type: String,
