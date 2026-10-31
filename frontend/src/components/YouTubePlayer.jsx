@@ -91,11 +91,20 @@ export default function YouTubePlayer({
 
               // If Participant, ensure initial seek snaps to room time on start
               if (!isController && event.data === window.YT.PlayerState.PLAYING) {
+                // If room is paused, immediately enforce pause
+                if (playStateRef.current === "paused") {
+                  event.target.pauseVideo?.();
+                  if (currentTimeRef.current !== undefined) {
+                    event.target.seekTo?.(currentTimeRef.current, true);
+                  }
+                  return;
+                }
+
                 const target = currentTimeRef.current || 0;
-                if (!hasSyncedInitialTime.current && target > 1) {
+                if (!hasSyncedInitialTime.current && target > 0) {
                   hasSyncedInitialTime.current = true;
                   const current = event.target.getCurrentTime?.() || 0;
-                  if (Math.abs(current - target) > 1.5) {
+                  if (Math.abs(current - target) > 1.0) {
                     event.target.seekTo(target, true);
                   }
                 }
@@ -166,27 +175,32 @@ export default function YouTubePlayer({
           playerRef.current.playVideo?.();
         }
       } else if (playState === "paused") {
-        if (state === window.YT.PlayerState.PLAYING || state === window.YT.PlayerState.BUFFERING) {
-          playerRef.current.pauseVideo?.();
+        playerRef.current.pauseVideo?.();
+        if (currentTime !== undefined) {
+          const current = playerRef.current.getCurrentTime?.() || 0;
+          if (Math.abs(current - currentTime) > 0.5) {
+            playerRef.current.seekTo?.(currentTime, true);
+          }
         }
       }
     } catch {
       // Ignore
     }
-  }, [playState, isReady]);
+  }, [playState, currentTime, isReady]);
 
-  // Sync Time Seek (drift > 2 seconds)
+  // Sync Time Seek (drift > 1.2 seconds while playing, > 0.5s when paused)
   useEffect(() => {
     if (!isReady || !playerRef.current?.getCurrentTime || currentTime === undefined) return;
     try {
       const current = playerRef.current.getCurrentTime();
-      if (Math.abs(current - currentTime) > 2) {
+      const threshold = playState === "paused" ? 0.5 : 1.2;
+      if (Math.abs(current - currentTime) > threshold) {
         playerRef.current.seekTo(currentTime, true);
       }
     } catch {
       // Ignore
     }
-  }, [currentTime, isReady]);
+  }, [currentTime, playState, isReady]);
 
   // Periodic time ticker for UI progress bar
   useEffect(() => {

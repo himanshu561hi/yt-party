@@ -68,8 +68,18 @@ export function useRoomSocket() {
       room_created: onRoomEntry,
       room_joined: onRoomEntry,
       sync_state: onSyncState,
+      sync_time: (data) => {
+        setCurrentRoom((prev) => (prev ? { ...prev, currentTime: data.currentTime, playState: data.playState } : null));
+        if (!isDraggingSeek.current) setLocalTime(data.currentTime);
+      },
       user_joined: (data) => updateParticipants(() => data.participants || []),
       user_left: (data) => updateParticipants(() => data.participants || [], data.user?.userId),
+      room_ended: (data) => {
+        setCurrentRoom(null);
+        setPendingRequests([]);
+        setRequestStatus(null);
+        setError(data.message || "The host has left the room. The watch party has ended.");
+      },
       participant_removed: (data) => {
         if (data.removed) {
           setCurrentRoom(null);
@@ -170,6 +180,15 @@ export function useRoomSocket() {
     if (!isController || !currentRoom || currentRoom.playState === "paused") return;
     socket.emit("pause", { time: typeof time === "number" ? time : localTime });
   };
+
+  // Controller periodic playback sync (every 2.5s while playing)
+  useEffect(() => {
+    if (!isController || !currentRoom || currentRoom.playState !== "playing") return;
+    const interval = setInterval(() => {
+      socket.emit("sync_time", { time: localTime });
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [isController, currentRoom?.playState, localTime]);
 
   const handleSeekChange = (e) => {
     if (!isController) return;

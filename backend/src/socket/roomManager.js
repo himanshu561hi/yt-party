@@ -165,6 +165,21 @@ export function leaveRoom(socketId) {
     (p) => p.socketId === socketId || p.userId === userId
   ) || { userId };
 
+  const isHost = leavingUser.role === "Host" || leavingUser.userId === room.hostUserId;
+
+  // If Host leaves, terminate the entire room
+  if (isHost) {
+    for (const p of room.participants) {
+      if (p.socketId) socketToRoomMap.delete(p.socketId);
+    }
+    rooms.delete(roomId);
+    if (Room.db?.readyState >= 1) {
+      Room.findOneAndUpdate({ roomId }, { $set: { isActive: false, participants: [] } }).catch(() => {});
+    }
+    return { roomId, leavingUser, participants: [], roomDeleted: true, roomEndedByHost: true };
+  }
+
+  // If a regular participant leaves, only remove that participant
   room.participants = room.participants.filter(
     (p) => p.socketId !== socketId
   );
@@ -180,12 +195,14 @@ export function leaveRoom(socketId) {
   if (room.participants.length === 0) {
     rooms.delete(roomId);
     roomDeleted = true;
-    Room.findOneAndUpdate({ roomId }, { $set: { isActive: false, participants: [] } }).catch(() => {});
+    if (Room.db?.readyState >= 1) {
+      Room.findOneAndUpdate({ roomId }, { $set: { isActive: false, participants: [] } }).catch(() => {});
+    }
   } else {
     syncRoomToDb(room);
   }
 
-  return { roomId, leavingUser, participants: room.participants, roomDeleted };
+  return { roomId, leavingUser, participants: room.participants, roomDeleted, roomEndedByHost: false };
 }
 
 export function assignRole({ senderSocketId, targetUserId, newRole }) {
@@ -290,6 +307,23 @@ export function updatePlayback(socketId, action, payload = {}) {
 
   syncPlaybackToDb(room.id, playbackState);
   return { room, playbackState };
+}
+
+export function syncRoomTime(socketId, time) {
+  const session = socketToRoomMap.get(socketId);
+  if (!session) return null;
+
+  const room = rooms.get(session.roomId);
+  if (!room) return null;
+
+  const participant = room.participants.find((p) => p.socketId === socketId || p.userId === session.userId);
+  if (!participant || (participant.role !== "Host" && participant.role !== "Moderator")) return null;
+
+  if (typeof time === "number" && time >= 0) {
+    room.currentTime = time;
+    room.lastUpdatedAt = Date.now();
+  }
+  return { roomId: room.id, currentTime: room.currentTime, playState: room.playState };
 }
 
 export const playRoom = (socketId, time) => updatePlayback(socketId, "play", { time });

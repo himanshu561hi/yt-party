@@ -5,6 +5,7 @@ import {
   assignRole,
   removeParticipant,
   updatePlayback,
+  syncRoomTime,
   createControlRequest,
   approveControlRequest,
   rejectControlRequest,
@@ -106,6 +107,16 @@ export function registerRoomHandlers(io, socket) {
   socket.on("pause", (payload) => handlePlayback("pause", payload));
   socket.on("seek", (payload) => handlePlayback("seek", payload));
   socket.on("change_video", (payload) => handlePlayback("change_video", payload));
+
+  // Periodic heartbeat sync from controller
+  socket.on("sync_time", (payload) => {
+    const result = syncRoomTime(socket.id, payload?.time);
+    if (!result) return;
+    socket.to(result.roomId).emit("sync_time", {
+      currentTime: result.currentTime,
+      playState: result.playState
+    });
+  });
 
   // Role assignment (Host only)
   socket.on("assign_role", (payload) => {
@@ -218,7 +229,14 @@ export function registerRoomHandlers(io, socket) {
     const result = leaveRoom(socket.id);
     if (!result) return;
     socket.leave(result.roomId);
-    if (!result.roomDeleted) {
+
+    if (result.roomEndedByHost) {
+      io.to(result.roomId).emit("room_ended", {
+        roomId: result.roomId,
+        message: "The host has left the room. The watch party has ended."
+      });
+      io.in(result.roomId).socketsLeave(result.roomId);
+    } else if (!result.roomDeleted) {
       io.to(result.roomId).emit("user_left", {
         user: result.leavingUser,
         participants: result.participants
