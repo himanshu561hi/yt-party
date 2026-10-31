@@ -2,11 +2,16 @@
 
 A real-time, synchronized YouTube watch party web application built with the MERN stack (Node.js, Express, MongoDB, React, Tailwind CSS) and Socket.IO.
 
+## Live Deployments
+
+- Frontend: https://yt-party-web3task.netlify.app
+- Backend: https://yt-party-backend.vercel.app
+
 ## Key Features
 
 - Authentication: Secure registration and login using salted scrypt password hashing and JWT authentication (cookies and Bearer headers).
 - Authenticated WebSockets: Real-time Socket.IO connections authenticated via handshake tokens. Identity and roles are server-enforced.
-- Room Management: Create and join watch party rooms with short, unique 6-character room codes.
+- Room Management: Create and join watch party rooms with short, unique 6-character room codes or shareable one-click invitation links.
 - Authoritative Playback Synchronization: Single source of truth for video ID, play/pause state, and playback timestamp broadcast to all room members.
 - Built-In Control Restriction: Native YouTube controls and click events are intercepted to prevent participants from independently altering local playback.
 - Role-Based Access Control:
@@ -31,7 +36,7 @@ YOUTUBE-STREAM/
 │   │   ├── socket/roomManager.js # In-memory room state and RBAC
 │   │   ├── utils/crypto.js       # Salted scrypt and JWT helpers
 │   │   └── app.js                # Express app setup and CORS
-│   ├── server.js                 # HTTP and Socket.IO server entrypoint
+│   ├── index.js                  # HTTP and Socket.IO server entrypoint
 │   ├── package.json
 │   └── .env.example
 ├── frontend/

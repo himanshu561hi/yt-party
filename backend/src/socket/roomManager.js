@@ -6,6 +6,7 @@ const socketToRoomMap = new Map();
 
 // Sync in-memory room state with MongoDB
 async function syncRoomToDb(room) {
+  if (Room.db?.readyState < 1) return;
   try {
     const host = room.participants?.find((p) => p.userId === room.hostUserId);
     await Room.findOneAndUpdate(
@@ -36,6 +37,7 @@ async function syncRoomToDb(room) {
 
 // Sync playback updates to MongoDB
 async function syncPlaybackToDb(roomId, updates) {
+  if (Room.db?.readyState < 1) return;
   try {
     await Room.findOneAndUpdate({ roomId }, { $set: updates });
   } catch {
@@ -93,6 +95,9 @@ export async function joinRoom({ roomId, username, userId, socketId }) {
   let room = rooms.get(roomId);
 
   if (!room) {
+    if (Room.db?.readyState < 1) {
+      return { error: "Room not found." };
+    }
     try {
       const dbRoom = await Room.findOne({ roomId });
       if (dbRoom) {

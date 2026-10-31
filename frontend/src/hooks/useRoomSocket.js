@@ -8,7 +8,7 @@ export function useRoomSocket() {
   const [requestStatus, setRequestStatus] = useState(null);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(null);
 
   const [localTime, setLocalTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -131,11 +131,27 @@ export function useRoomSocket() {
     setError(null);
   };
 
-  const handleCopyCode = () => {
-    if (!currentRoom?.roomId) return;
-    navigator.clipboard.writeText(currentRoom.roomId);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopyCode = async () => {
+    if (!currentRoom?.roomId || !navigator?.clipboard?.writeText) return;
+    try {
+      await navigator.clipboard.writeText(currentRoom.roomId);
+      setCopied("code");
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      // Failed to write to clipboard; do not display copied status
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!currentRoom?.roomId || !navigator?.clipboard?.writeText) return;
+    const inviteUrl = `${window.location.origin}/?room=${encodeURIComponent(currentRoom.roomId)}`;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied("link");
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      // Failed to write to clipboard; do not display copied status
+    }
   };
 
   // Controller Actions
@@ -247,6 +263,7 @@ export function useRoomSocket() {
     handleJoinRoom,
     handleLeaveRoom,
     handleCopyCode,
+    handleCopyLink,
     handleTogglePlay,
     handlePlay,
     handlePause,

@@ -1,10 +1,34 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../hooks/useAuth.jsx";
 
 export default function HomePage({ onCreateRoom, onJoinRoom, isSubmitting }) {
   const { user } = useAuth();
-  const [roomCode, setRoomCode] = useState("");
+  const [roomCode, setRoomCode] = useState(() => {
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get("room")?.trim();
+      if (fromUrl) return fromUrl;
+      return (sessionStorage.getItem("pending_invite_room") || "").trim();
+    } catch {
+      return "";
+    }
+  });
   const [localError, setLocalError] = useState("");
+  const autoJoinAttempted = useRef(false);
+
+  useEffect(() => {
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get("room")?.trim();
+      const inviteCode = fromUrl || (sessionStorage.getItem("pending_invite_room") || "").trim();
+      if (inviteCode && !autoJoinAttempted.current) {
+        autoJoinAttempted.current = true;
+        sessionStorage.removeItem("pending_invite_room");
+        window.history.replaceState({}, document.title, window.location.pathname);
+        onJoinRoom(inviteCode, user?.name || "Participant");
+      }
+    } catch {
+      // Ignore URL parsing errors
+    }
+  }, [user, onJoinRoom]);
 
   const handleCreate = () => {
     setLocalError("");

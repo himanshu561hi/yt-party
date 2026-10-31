@@ -64,6 +64,7 @@ export default function RoomPage({ roomState }) {
           username={currentRoom.username}
           copied={roomState.copied}
           onCopyCode={roomState.handleCopyCode}
+          onCopyLink={roomState.handleCopyLink}
           onLeaveRoom={roomState.handleLeaveRoom}
         />
 

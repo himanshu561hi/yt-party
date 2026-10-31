@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "./hooks/useAuth.jsx";
 import { useRoomSocket } from "./hooks/useRoomSocket.js";
 import LoginPage from "./pages/LoginPage.jsx";
@@ -10,6 +10,15 @@ function AppContent() {
   const { user, loading, logout } = useAuth();
   const [authView, setAuthView] = useState("login");
   const roomState = useRoomSocket();
+
+  useEffect(() => {
+    try {
+      const code = new URLSearchParams(window.location.search).get("room")?.trim();
+      if (code) sessionStorage.setItem("pending_invite_room", code);
+    } catch {
+      // Ignore URL parsing errors
+    }
+  }, []);
 
   const handleLogout = () => {
     if (roomState.currentRoom) {
