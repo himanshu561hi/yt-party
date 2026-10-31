@@ -1,12 +1,25 @@
 import crypto from "crypto";
+import mongoose from "mongoose";
 import { Room } from "../models/Room.js";
+import connectDB from "../config/db.js";
 
 const rooms = new Map();
 const socketToRoomMap = new Map();
 
+async function ensureDb() {
+  if (mongoose.connection.readyState < 1) {
+    try {
+      await connectDB();
+    } catch {
+      // Non-blocking
+    }
+  }
+}
+
 // Sync in-memory room state with MongoDB
 async function syncRoomToDb(room) {
-  if (Room.db?.readyState < 1) return;
+  await ensureDb();
+  if (mongoose.connection.readyState < 1) return;
   try {
     const host = room.participants?.find((p) => p.userId === room.hostUserId);
     await Room.findOneAndUpdate(
@@ -37,7 +50,8 @@ async function syncRoomToDb(room) {
 
 // Sync playback updates to MongoDB
 async function syncPlaybackToDb(roomId, updates) {
-  if (Room.db?.readyState < 1) return;
+  await ensureDb();
+  if (mongoose.connection.readyState < 1) return;
   try {
     await Room.findOneAndUpdate({ roomId }, { $set: updates });
   } catch {
@@ -67,7 +81,7 @@ export function generateRoomId() {
 }
 
 export async function createRoom({ username, userId, socketId }) {
-  const roomId = generateRoomId();
+  const roomId = generateRoomId().toLowerCase();
   const finalUserId = userId || `user_${crypto.randomUUID().slice(0, 8)}`;
 
   const creator = {
@@ -96,15 +110,29 @@ export async function createRoom({ username, userId, socketId }) {
 }
 
 export async function joinRoom({ roomId, username, userId, socketId, isSocketConnected }) {
-  let room = rooms.get(roomId);
+  const normalizedRoomId = roomId?.trim().toLowerCase();
+  if (!normalizedRoomId) {
+    return { error: "Room ID is required." };
+  }
+
+  let room = rooms.get(normalizedRoomId);
 
   if (!room) {
-    if (Room.db?.readyState < 1) {
-      return { error: "Room not found." };
-    }
+    await ensureDb();
     try {
-      const dbRoom = await Room.findOne({ roomId });
+      const dbRoom = await Room.findOne({ roomId: normalizedRoomId });
       if (dbRoom) {
+        const joinerId = userId || "";
+        const isHost = joinerId && joinerId === dbRoom.hostUserId;
+        if (!dbRoom.isActive && !isHost && (!dbRoom.participants || dbRoom.participants.length === 0)) {
+          return { error: "This room has ended." };
+        }
+
+        const elapsed = (dbRoom.playState === "playing" && dbRoom.updatedAt)
+          ? Math.max(0, (Date.now() - new Date(dbRoom.updatedAt).getTime()) / 1000)
+          : 0;
+        const initialTime = Math.max(0, (dbRoom.currentTime || 0) + elapsed);
+
         room = {
           id: dbRoom.roomId,
           hostUserId: dbRoom.hostUserId,
@@ -116,11 +144,11 @@ export async function joinRoom({ roomId, username, userId, socketId, isSocketCon
           })),
           videoId: dbRoom.videoId || "xvT1jH8B9AM",
           playState: dbRoom.playState || "paused",
-          currentTime: dbRoom.currentTime || 0,
+          currentTime: initialTime,
           lastUpdatedAt: Date.now(),
           pendingRequests: new Map()
         };
-        rooms.set(roomId, room);
+        rooms.set(normalizedRoomId, room);
       } else {
         return { error: "Room not found." };
       }
@@ -131,24 +159,39 @@ export async function joinRoom({ roomId, username, userId, socketId, isSocketCon
 
   const finalUserId = userId || `user_${crypto.randomUUID().slice(0, 8)}`;
 
+  // Deduplicate participants in memory by userId to ensure no double entries
+  const seenUsers = new Set();
+  room.participants = room.participants.filter((p) => {
+    if (!p.userId || seenUsers.has(p.userId)) return false;
+    seenUsers.add(p.userId);
+    return true;
+  });
+
   // Check if this user is already registered in the room
   const existingParticipant = room.participants.find((p) => p.userId === finalUserId);
-  const isOldSocketAlive = Boolean(existingParticipant?.socketId && isSocketConnected?.(existingParticipant.socketId));
 
-  if (existingParticipant && !isOldSocketAlive) {
-    // Reconnection of an existing participant: update socket in-place, preserve role
-    if (existingParticipant.socketId) {
-      socketToRoomMap.delete(existingParticipant.socketId);
+  if (existingParticipant) {
+    if (existingParticipant.socketId === socketId) {
+      // Same socket already in room - return existing entry without duplicating
+      return { room, user: existingParticipant };
     }
-    existingParticipant.socketId = socketId;
-    if (username) existingParticipant.username = username;
-    socketToRoomMap.set(socketId, { roomId, userId: existingParticipant.userId });
-    await syncRoomToDb(room);
-    return { room, user: existingParticipant };
+
+    const isDifferentSocketAlive = isSocketConnected?.(existingParticipant.socketId);
+    if (!isDifferentSocketAlive) {
+      // Reconnection of existing participant with a new socket ID
+      if (existingParticipant.socketId) {
+        socketToRoomMap.delete(existingParticipant.socketId);
+      }
+      existingParticipant.socketId = socketId;
+      if (username) existingParticipant.username = username;
+      socketToRoomMap.set(socketId, { roomId: normalizedRoomId, userId: existingParticipant.userId });
+      await syncRoomToDb(room);
+      return { room, user: existingParticipant };
+    }
   }
 
-  // If old socket is alive, this is a second simultaneous tab for the user
-  const isDuplicateUser = Boolean(existingParticipant && isOldSocketAlive);
+  // If a different socket is alive, this is a second simultaneous tab for the user
+  const isDuplicateUser = Boolean(existingParticipant);
   const effectiveUserId = isDuplicateUser ? `${finalUserId}_${socketId.slice(0, 4)}` : finalUserId;
   const isHost = finalUserId === room.hostUserId && !isDuplicateUser;
   const role = isHost ? "Host" : "Participant";
@@ -167,7 +210,7 @@ export async function joinRoom({ roomId, username, userId, socketId, isSocketCon
     room.participants.push(participant);
   }
 
-  socketToRoomMap.set(socketId, { roomId, userId: effectiveUserId });
+  socketToRoomMap.set(socketId, { roomId: normalizedRoomId, userId: effectiveUserId });
   await syncRoomToDb(room);
 
   return { room, user: participant };
@@ -343,6 +386,7 @@ export function syncRoomTime(socketId, time) {
   if (typeof time === "number" && time >= 0) {
     room.currentTime = time;
     room.lastUpdatedAt = Date.now();
+    syncPlaybackToDb(room.id, { currentTime: time, playState: room.playState });
   }
   return { roomId: room.id, currentTime: room.currentTime, playState: room.playState };
 }

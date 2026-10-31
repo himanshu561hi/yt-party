@@ -17,8 +17,8 @@ export default function HomePage({ onCreateRoom, onJoinRoom, isSubmitting }) {
 
   useEffect(() => {
     try {
-      const fromUrl = new URLSearchParams(window.location.search).get("room")?.trim();
-      const inviteCode = fromUrl || (sessionStorage.getItem("pending_invite_room") || "").trim();
+      const fromUrl = new URLSearchParams(window.location.search).get("room")?.trim().toLowerCase();
+      const inviteCode = fromUrl || (sessionStorage.getItem("pending_invite_room") || "").trim().toLowerCase();
       if (inviteCode && !autoJoinAttempted.current) {
         autoJoinAttempted.current = true;
         sessionStorage.removeItem("pending_invite_room");
@@ -37,7 +37,7 @@ export default function HomePage({ onCreateRoom, onJoinRoom, isSubmitting }) {
 
   const handleJoin = (e) => {
     e.preventDefault();
-    const trimmed = roomCode.trim();
+    const trimmed = roomCode.trim().toLowerCase();
     if (!trimmed) {
       setLocalError("Please enter a room code.");
       return;

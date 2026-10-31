@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { socket } from "../socket.js";
+import { socket, SERVER_URL } from "../socket.js";
 
 export function useRoomSocket() {
   const [isConnected, setIsConnected] = useState(socket.connected);
@@ -243,6 +243,53 @@ export function useRoomSocket() {
     }, 2500);
     return () => clearInterval(interval);
   }, [isController, currentRoom?.playState, localTime]);
+
+  // Periodic background state alignment with MongoDB (every 2.5s while in room)
+  useEffect(() => {
+    const roomId = currentRoom?.roomId;
+    if (!roomId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${SERVER_URL}/api/rooms/${roomId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.room) return;
+
+        // Sync participants from database to ensure multi-instance consistency
+        const dbParticipants = data.room.participants || [];
+        if (dbParticipants.length > 0) {
+          setCurrentRoom((prev) => {
+            if (!prev) return null;
+            const seen = new Set();
+            const unique = [];
+            for (const p of dbParticipants) {
+              if (p.userId && !seen.has(p.userId)) {
+                seen.add(p.userId);
+                unique.push(p);
+              }
+            }
+            return { ...prev, participants: unique };
+          });
+        }
+
+        // For participants: if room video or playState differs, align immediately
+        if (!isController && data.room.videoId) {
+          setCurrentRoom((prev) => {
+            if (!prev) return null;
+            const updates = {};
+            if (data.room.videoId !== prev.videoId) updates.videoId = data.room.videoId;
+            if (data.room.playState !== prev.playState) updates.playState = data.room.playState;
+            return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev;
+          });
+        }
+      } catch {
+        // Non-blocking
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [currentRoom?.roomId, isController]);
 
   const handleSeekChange = (e) => {
     if (!isController) return;

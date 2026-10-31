@@ -17,6 +17,7 @@ export default function YouTubePlayer({
   const internalWrapperRef = useRef(null);
   const wrapperRef = externalWrapperRef || internalWrapperRef;
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isPlayingLocally, setIsPlayingLocally] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [playerError, setPlayerError] = useState(null);
   const currentVideoId = useRef(videoId);
@@ -112,6 +113,7 @@ export default function YouTubePlayer({
             },
             onStateChange: (event) => {
               if (!isMounted) return;
+              setIsPlayingLocally(event.data === window.YT.PlayerState.PLAYING);
 
               // If Host/Controller, sync local YouTube state changes to the room
               if (isController) {
@@ -124,7 +126,7 @@ export default function YouTubePlayer({
                 }
               }
 
-              // If Participant, ensure initial seek snaps to room time on start
+              // If Participant, ensure playback snaps to room time on start
               if (!isController && event.data === window.YT.PlayerState.PLAYING) {
                 // If room is paused, immediately enforce pause
                 if (playStateRef.current === "paused") {
@@ -136,12 +138,9 @@ export default function YouTubePlayer({
                 }
 
                 const target = currentTimeRef.current || 0;
-                if (!hasSyncedInitialTime.current && target > 0) {
-                  hasSyncedInitialTime.current = true;
-                  const current = event.target.getCurrentTime?.() || 0;
-                  if (Math.abs(current - target) > 1.0) {
-                    event.target.seekTo(target, true);
-                  }
+                const current = event.target.getCurrentTime?.() || 0;
+                if (Math.abs(current - target) > 1.0) {
+                  event.target.seekTo(target, true);
                 }
               }
             },
@@ -272,19 +271,33 @@ export default function YouTubePlayer({
           if (isController) {
             onTogglePlay?.();
           } else {
-            // Participant clicks video - if browser blocked unmuted autoplay, resume and sync
+            // Participant clicks video - unblock autoplay, resume and snap to room time
             const player = playerRef.current;
             if (player) {
-              const state = player.getPlayerState?.();
-              if (playStateRef.current === "playing" && state !== 1) {
-                player.playVideo?.();
+              try {
+                player.unMute?.();
                 const target = currentTimeRef.current || 0;
                 if (target > 0) player.seekTo?.(target, true);
-              }
+                if (playStateRef.current === "playing") {
+                  player.playVideo?.();
+                }
+              } catch {}
             }
           }
         }}
       />
+
+      {/* Autoplay prompt banner for participants when room is playing but local autoplay was blocked */}
+      {!isController && playState === "playing" && !isPlayingLocally && isReady && (
+        <div className="absolute inset-0 z-12 flex items-center justify-center pointer-events-none">
+          <div className="px-4 py-2 rounded-full bg-slate-900/90 text-white text-xs font-semibold shadow-lg backdrop-blur-xs flex items-center gap-2 animate-pulse">
+            <svg className="w-4 h-4 fill-current text-indigo-400" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <span>Click video to watch in sync</span>
+          </div>
+        </div>
+      )}
 
       {/* Loading overlay */}
       {!isReady && !playerError && (

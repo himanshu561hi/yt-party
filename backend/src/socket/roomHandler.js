@@ -48,7 +48,7 @@ export function registerRoomHandlers(io, socket) {
   // Join room
   socket.on("join_room", async (payload) => {
     try {
-      const roomId = payload?.roomId?.trim();
+      const roomId = payload?.roomId?.trim().toLowerCase();
       if (!roomId) {
         return socket.emit("action_error", { action: "join_room", message: "Room ID is required." });
       }

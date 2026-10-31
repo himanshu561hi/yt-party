@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 import { authService } from "./services/authService.js";
 
-const SERVER_URL = (import.meta.env.VITE_SERVER_URL || "http://localhost:5001").replace(/\/+$/, "");
+export const SERVER_URL = (import.meta.env.VITE_SERVER_URL || "http://localhost:5001").replace(/\/+$/, "");
 
 const initialToken = authService.getToken();
 
