@@ -5,7 +5,7 @@ Watch YouTube videos together in sync with friends. Built with React, Node.js, E
 ## Live Links
 
 - Frontend: https://yt-party-web3task.netlify.app
-- Backend: https://yt-party-backend.vercel.app
+- Backend: https://yt-party.vercel.app
 
 ## Features
 
